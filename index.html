@@ -1,22 +1,13 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-  <link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#2563eb">
-
-<script>
-  // Mendaftarkan Service Worker
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./sw.js')
-        .then(() => console.log('Aplikasi siap digunakan offline!'))
-        .catch(err => console.log('Gagal mendaftarkan offline mode:', err));
-    });
-  }
-</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Aplikasi Kas & Iuran RT (Offline Support)</title>
+  <title>Aplikasi Kas & Iuran RT</title>
+  
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#2563eb">
+
   <!-- Google Fonts: Inter -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -34,20 +25,110 @@
       --success: #16a34a;
       --danger: #dc2626;
       --warning: #d97706;
+      --sidebar-width: 260px;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
-    body { background-color: var(--bg-color); color: var(--text-main); padding: 20px 12px; }
-    
+    body { background-color: var(--bg-color); color: var(--text-main); min-height: 100vh; overflow-x: hidden; }
+
+    /* NAVBAR ATAS (HEADER MOBILE) */
+    .top-navbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: var(--card-bg);
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border-color);
+      position: sticky;
+      top: 0;
+      z-index: 90;
+    }
+    .hamburger-btn {
+      background: transparent;
+      border: none;
+      font-size: 1.4rem;
+      cursor: pointer;
+      color: var(--text-main);
+      padding: 4px 8px;
+      border-radius: 6px;
+    }
+    .hamburger-btn:hover { background: #f1f5f9; }
+    .nav-title { font-size: 1.1rem; font-weight: 700; color: var(--primary); }
+
+    /* SIDEBAR NAVIGASI */
+    .sidebar {
+      position: fixed;
+      top: 0;
+      left: calc(-1 * var(--sidebar-width));
+      width: var(--sidebar-width);
+      height: 100%;
+      background: var(--card-bg);
+      box-shadow: 4px 0 20px rgba(0,0,0,0.1);
+      transition: left 0.3s ease;
+      z-index: 100;
+      display: flex;
+      flex-direction: column;
+    }
+    .sidebar.open { left: 0; }
+
+    .sidebar-header {
+      padding: 20px 16px;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .sidebar-header h3 { font-size: 1.1rem; color: var(--primary); }
+    .close-btn {
+      background: transparent;
+      border: none;
+      font-size: 1.2rem;
+      cursor: pointer;
+      color: var(--text-muted);
+    }
+
+    .sidebar-menu {
+      display: flex;
+      flex-direction: column;
+      padding: 12px;
+      gap: 6px;
+    }
+    .menu-item {
+      padding: 12px 14px;
+      border: none;
+      background: transparent;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      text-align: left;
+      transition: all 0.2s;
+    }
+    .menu-item:hover { background: #f1f5f9; color: var(--text-main); }
+    .menu-item.active { background: #eff6ff; color: var(--primary); }
+
+    /* BACKDROP / OVERLAY GELAP SAAT SIDEBAR BUKA */
+    .sidebar-overlay {
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(15, 23, 42, 0.4);
+      backdrop-filter: blur(2px);
+      display: none;
+      z-index: 95;
+    }
+    .sidebar-overlay.active { display: block; }
+
+    /* MAIN CONTAINER */
     .container { 
       max-width: 650px; 
-      margin: auto; 
+      margin: 20px auto; 
       background: var(--card-bg); 
-      padding: 24px; 
+      padding: 20px; 
       border-radius: 16px; 
       box-shadow: 0 10px 25px -5px rgba(0,0,0,0.05); 
     }
-    
+
     /* STATUS KONEKSI BADGE */
     .status-bar {
       display: flex;
@@ -58,50 +139,20 @@
       font-size: 0.8rem;
       font-weight: 600;
       margin-bottom: 16px;
-      background: #e2e8f0;
     }
     .status-online { background: #dcfce7; color: var(--success); }
     .status-offline { background: #fef3c7; color: var(--warning); }
 
-    /* HEADER */
-    .header { text-align: center; margin-bottom: 20px; }
-    .header h2 { font-size: 1.5rem; font-weight: 700; color: var(--text-main); }
-    .header p { font-size: 0.875rem; color: var(--text-muted); }
-    
-    /* NAVIGASI TAB */
-    .nav-tabs { 
-      display: flex; 
-      gap: 6px; 
-      margin-bottom: 20px; 
-      background: #f1f5f9; 
-      padding: 4px; 
-      border-radius: 12px; 
-      overflow-x: auto;
-    }
-    .tab-btn { 
-      flex: 1; 
-      min-width: 90px;
-      padding: 10px 12px; 
-      border: none; 
-      background: transparent; 
-      border-radius: 8px; 
-      cursor: pointer; 
-      font-weight: 600; 
-      color: var(--text-muted); 
-      font-size: 0.825rem; 
-      text-align: center; 
-      white-space: nowrap;
-    }
-    .tab-btn.active { 
-      background: var(--card-bg); 
-      color: var(--primary); 
-      box-shadow: 0 2px 4px rgba(0,0,0,0.06); 
-    }
-    
-    .tab-content { display: none; }
+    /* TAB CONTENT */
+    .tab-content { display: none; animation: fadeIn 0.3s ease; }
     .tab-content.active { display: block; }
-    
-    /* FORM */
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* FORM STYLING */
     .form-group { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
     label { font-size: 0.8rem; font-weight: 600; color: var(--text-main); text-transform: uppercase; }
     input { 
@@ -128,7 +179,7 @@
       cursor: pointer; 
       margin-top: 8px; 
     }
-    
+
     /* LAPORAN & RINGKASAN */
     .summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 20px; }
     .summary-card { background: #f8fafc; padding: 12px; border-radius: 10px; border: 1px solid var(--border-color); text-align: center; }
@@ -158,33 +209,54 @@
       border-radius: 50%; animation: rotation 0.8s linear infinite; margin-bottom: 12px;
     }
     @keyframes rotation { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+    @media (max-width: 480px) {
+      body { padding: 0; }
+      .container { margin: 10px; border-radius: 12px; padding: 16px; }
+      .summary-grid { grid-template-columns: 1fr; }
+      .summary-card { text-align: left; display: flex; justify-content: space-between; align-items: center; }
+    }
   </style>
 </head>
 <body>
 
+<!-- COMPONENT LOADING OVERLAY -->
 <div id="loadingOverlay">
   <div class="spinner"></div>
   <div id="loadingText">Memproses data...</div>
 </div>
 
+<!-- NAVBAR TOP FIX -->
+<div class="top-navbar">
+  <button class="hamburger-btn" onclick="toggleSidebar()">☰</button>
+  <div class="nav-title" id="judulHalaman">Iuran Warga</div>
+  <div style="width: 24px;"></div>
+</div>
+
+<!-- SIDEBAR OVERLAY -->
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
+
+<!-- SIDEBAR MENU DRAWER -->
+<div class="sidebar" id="sidebar">
+  <div class="sidebar-header">
+    <h3>Kas & Iuran RT</h3>
+    <button class="close-btn" onclick="closeSidebar()">✕</button>
+  </div>
+  <div class="sidebar-menu">
+    <button class="menu-item active" onclick="pilihMenu(event, 'tabIuran', 'Iuran Warga')">💳 Input Iuran Warga</button>
+    <button class="menu-item" onclick="pilihMenu(event, 'tabKas', 'Kas Masuk Lain')">📥 Input Kas Lain</button>
+    <button class="menu-item" onclick="pilihMenu(event, 'tabPengeluaran', 'Pengeluaran Kas')">📤 Input Pengeluaran</button>
+    <button class="menu-item" onclick="pilihMenu(event, 'tabCekWarga', 'Status Iuran Warga')">🔍 Cek Status Warga</button>
+    <button class="menu-item" onclick="pilihMenu(event, 'tabLaporan', 'Laporan Bulanan RT')">📊 Laporan Bulanan RT</button>
+  </div>
+</div>
+
+<!-- MAIN CONTENT CONTAINER -->
 <div class="container">
   <!-- INDIKATOR STATUS KONEKSI & SINKRONISASI -->
   <div id="statusBar" class="status-bar status-online">
     <span id="koneksiTeks">Status: Online</span>
     <span id="antreanTeks">Antrean Offline: 0</span>
-  </div>
-
-  <div class="header">
-    <h2>Kas & Iuran RT</h2>
-    <p>Pengelolaan Keuangan Rukun Tetangga</p>
-  </div>
-
-  <div class="nav-tabs">
-    <button class="tab-btn active" onclick="bukaTab(event, 'tabIuran')">Iuran Warga</button>
-    <button class="tab-btn" onclick="bukaTab(event, 'tabKas')">Kas Lain</button>
-    <button class="tab-btn" onclick="bukaTab(event, 'tabPengeluaran')">Pengeluaran</button>
-    <button class="tab-btn" onclick="bukaTab(event, 'tabCekWarga')">Cek Warga</button>
-    <button class="tab-btn" onclick="bukaTab(event, 'tabLaporan')">Laporan RT</button>
   </div>
 
   <!-- MENU 1: INPUT IURAN WARGA -->
@@ -260,8 +332,8 @@
       <div class="form-group"><label>Blok</label><input type="text" id="cekBlok" placeholder="F1"></div>
       <div class="form-group"><label>No. Rumah</label><input type="number" id="cekNoRumah" placeholder="1"></div>
     </div>
-    <div class="form-group"><label>Tahun</label><input type="number" id="cekTahun" value="2026"></div>
-    <button onclick="cekIuranWarga()" class="btn-submit" style="background-color: #0284c7;">Cek Status Pembayaran</button>
+    <div class="form-group"><label>Tahun</label><input type="number" id="cekTahun" style="margin-bottom: 0;"></div>
+    <button onclick="cekIuranWarga()" class="btn-submit" style="background-color: #0284c7; margin-top: 14px;">Cek Status Pembayaran</button>
 
     <div class="table-container" style="margin-top: 16px;">
       <table id="tabelStatusWarga" style="display:none;">
@@ -293,8 +365,69 @@
 </div>
 
 <script>
-  const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzoNNBnyomIo7IhjVUpefIUkhBpqpWeJxIR6O7AbBxtemH1iOCZ8lHOLOg9Nbj0t2nK/exec"; // Ganti dengan URL Google Apps Script Anda
+  const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzoNNBnyomIo7IhjVUpefIUkhBpqpWeJxIR6O7AbBxtemH1iOCZ8lHOLOg9Nbj0t2nK/execa"; // Ganti dengan URL Google Apps Script Anda
   const namaBulan = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+
+  // --- HELPER MENDAPATKAN TANGGAL & BULAN HARI INI ---
+  function dapatkanTanggalHariIni() {
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  }
+
+  function dapatkanBulanHariIni() {
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    return `${yyyy}-${mm}`;
+  }
+
+  function setTanggalDefaultForm() {
+    const hariIni = dapatkanTanggalHariIni();
+    const bulanIni = dapatkanBulanHariIni();
+    
+    document.getElementById("tglIuran").value = hariIni;
+    document.getElementById("tglKas").value = hariIni;
+    document.getElementById("tglPengeluaran").value = hariIni;
+    
+    document.getElementById("blnIuran").value = bulanIni;
+    document.getElementById("filterBulan").value = bulanIni;
+    document.getElementById("cekTahun").value = new Date().getFullYear();
+  }
+
+  // --- LOGIKA SIDEBAR HIDE / SHOW ---
+  function toggleSidebar() {
+    document.getElementById("sidebar").classList.toggle("open");
+    document.getElementById("sidebarOverlay").classList.toggle("active");
+  }
+
+  function closeSidebar() {
+    document.getElementById("sidebar").classList.remove("open");
+    document.getElementById("sidebarOverlay").classList.remove("active");
+  }
+
+  function pilihMenu(evt, tabName, judul) {
+    const tabContents = document.getElementsByClassName("tab-content");
+    for (let i = 0; i < tabContents.length; i++) tabContents[i].classList.remove("active");
+    
+    const menuItems = document.getElementsByClassName("menu-item");
+    for (let i = 0; i < menuItems.length; i++) menuItems[i].classList.remove("active");
+
+    document.getElementById(tabName).classList.add("active");
+    evt.currentTarget.classList.add("active");
+    document.getElementById("judulHalaman").innerText = judul;
+    
+    closeSidebar();
+  }
+
+  // --- LOGIKA UTAMA & OFFLINE SUPPORT ---
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js').catch(err => console.log('SW Error:', err));
+    });
+  }
 
   function tampilkanLoading(pesan = "Memproses data...") {
     document.getElementById("loadingText").innerText = pesan;
@@ -322,17 +455,6 @@
     return bulanString;
   }
 
-  function bukaTab(evt, tabName) {
-    const tabContents = document.getElementsByClassName("tab-content");
-    for (let i = 0; i < tabContents.length; i++) tabContents[i].classList.remove("active");
-    const tabBtns = document.getElementsByClassName("tab-btn");
-    for (let i = 0; i < tabBtns.length; i++) tabBtns[i].classList.remove("active");
-    document.getElementById(tabName).classList.add("active");
-    evt.currentTarget.classList.add("active");
-  }
-
-  // --- LOGIKA SINKRONISASI & OFFLINE ---
-
   function updateStatusKoneksi() {
     const bar = document.getElementById("statusBar");
     const teks = document.getElementById("koneksiTeks");
@@ -343,9 +465,7 @@
     if (navigator.onLine) {
       bar.className = "status-bar status-online";
       teks.innerText = "Status: Online";
-      if (antrean.length > 0) {
-        sinkronkanDataOffline();
-      }
+      if (antrean.length > 0) sinkronkanDataOffline();
     } else {
       bar.className = "status-bar status-offline";
       teks.innerText = "Status: Offline";
@@ -368,13 +488,12 @@
 
   function kirimData(payload) {
     if (!navigator.onLine) {
-      // JIKA OFFLINE
       simpanKeAntreanOffline(payload);
-      alert("Koneksi offline: Data berhasil disimpan sementara di HP/Laptop dan akan otomatis tersinkron saat internet tersambung.");
+      alert("Koneksi offline: Data disimpan sementara di HP dan akan disinkronkan saat online.");
+      setTanggalDefaultForm();
       return;
     }
 
-    // JIKA ONLINE
     tampilkanLoading("Menyimpan ke Google Sheets...");
     fetch(SCRIPT_URL, {
       method: "POST",
@@ -386,18 +505,18 @@
       setTimeout(() => {
         sembunyikanLoading();
         alert("Data berhasil disimpan!");
+        setTanggalDefaultForm();
         muatLaporanKeuangan();
       }, 1500);
     })
     .catch(err => {
       sembunyikanLoading();
-      // JIKA GAGAL SIMPAN ONLINE, SIMPAN LOKAL
       simpanKeAntreanOffline(payload);
       alert("Gagal terhubung ke server. Data disimpan di antrean offline.");
+      setTanggalDefaultForm();
     });
   }
 
-  // SINKRONISASI OTOMATIS SAAT INTERNET TERHUBUNG KEMBALI
   async function sinkronkanDataOffline() {
     const antrean = ambilAntreanOffline();
     if (antrean.length === 0) return;
@@ -413,11 +532,10 @@
           body: JSON.stringify(antrean[i])
         });
       } catch (e) {
-        console.error("Gagal sinkron data ke-", i, e);
+        console.error("Gagal sinkron:", e);
       }
     }
 
-    // KOSONGKAN ANTREAN SETELAH DIUNGGAH
     localStorage.removeItem("antreanKasRT");
     sembunyikanLoading();
     updateStatusKoneksi();
@@ -425,7 +543,7 @@
     muatLaporanKeuangan();
   }
 
-  // EVENT FORM SUBMIT
+  // EVENT FORM
   document.getElementById("formKas").onsubmit = (e) => {
     e.preventDefault();
     kirimData({
@@ -549,7 +667,8 @@
       });
   }
 
-  // INISIALISASI
+  // INISIALISASI SAAT HALAMAN DIBUKA
+  setTanggalDefaultForm();
   updateStatusKoneksi();
 </script>
 </body>
