@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#2563eb">
+
+<script>
+  // Mendaftarkan Service Worker
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js')
+        .then(() => console.log('Aplikasi siap digunakan offline!'))
+        .catch(err => console.log('Gagal mendaftarkan offline mode:', err));
+    });
+  }
+</script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Aplikasi Kas & Iuran RT (Offline Support)</title>
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <style>
+    :root {
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --bg-color: #f8fafc;
+      --card-bg: #ffffff;
+      --text-main: #0f172a;
+      --text-muted: #64748b;
+      --border-color: #e2e8f0;
+      --success: #16a34a;
+      --danger: #dc2626;
+      --warning: #d97706;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
+    body { background-color: var(--bg-color); color: var(--text-main); padding: 20px 12px; }
+    
+    .container { 
+      max-width: 650px; 
+      margin: auto; 
+      background: var(--card-bg); 
+      padding: 24px; 
+      border-radius: 16px; 
+      box-shadow: 0 10px 25px -5px rgba(0,0,0,0.05); 
+    }
+    
+    /* STATUS KONEKSI BADGE */
+    .status-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      margin-bottom: 16px;
+      background: #e2e8f0;
+    }
+    .status-online { background: #dcfce7; color: var(--success); }
+    .status-offline { background: #fef3c7; color: var(--warning); }
+
+    /* HEADER */
+    .header { text-align: center; margin-bottom: 20px; }
+    .header h2 { font-size: 1.5rem; font-weight: 700; color: var(--text-main); }
+    .header p { font-size: 0.875rem; color: var(--text-muted); }
+    
+    /* NAVIGASI TAB */
+    .nav-tabs { 
+      display: flex; 
+      gap: 6px; 
+      margin-bottom: 20px; 
+      background: #f1f5f9; 
+      padding: 4px; 
+      border-radius: 12px; 
+      overflow-x: auto;
+    }
+    .tab-btn { 
+      flex: 1; 
+      min-width: 90px;
+      padding: 10px 12px; 
+      border: none; 
+      background: transparent; 
+      border-radius: 8px; 
+      cursor: pointer; 
+      font-weight: 600; 
+      color: var(--text-muted); 
+      font-size: 0.825rem; 
+      text-align: center; 
+      white-space: nowrap;
+    }
+    .tab-btn.active { 
+      background: var(--card-bg); 
+      color: var(--primary); 
+      box-shadow: 0 2px 4px rgba(0,0,0,0.06); 
+    }
+    
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+    
+    /* FORM */
+    .form-group { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+    label { font-size: 0.8rem; font-weight: 600; color: var(--text-main); text-transform: uppercase; }
+    input { 
+      width: 100%; 
+      padding: 12px 14px; 
+      border: 1px solid var(--border-color); 
+      border-radius: 8px; 
+      font-size: 0.95rem; 
+      background-color: #fafafa;
+    }
+    input:focus { outline: none; border-color: var(--primary); background-color: #fff; }
+    .form-group-row { display: flex; gap: 12px; }
+    .form-group-row > div { flex: 1; }
+    
+    button.btn-submit { 
+      width: 100%;
+      padding: 13px;
+      background-color: var(--primary); 
+      color: white; 
+      border: none; 
+      border-radius: 8px;
+      font-size: 0.95rem;
+      font-weight: 600; 
+      cursor: pointer; 
+      margin-top: 8px; 
+    }
+    
+    /* LAPORAN & RINGKASAN */
+    .summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 20px; }
+    .summary-card { background: #f8fafc; padding: 12px; border-radius: 10px; border: 1px solid var(--border-color); text-align: center; }
+    .summary-card label { font-size: 0.7rem; color: var(--text-muted); display: block; margin-bottom: 4px; }
+    .summary-card .amount { font-weight: 700; font-size: 0.95rem; }
+    
+    .table-container { overflow-x: auto; margin-top: 10px; border: 1px solid var(--border-color); border-radius: 10px; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; min-width: 450px; }
+    th { background-color: #f1f5f9; color: var(--text-muted); font-weight: 600; text-transform: uppercase; font-size: 0.75rem; }
+    th, td { padding: 12px 14px; text-align: left; border-bottom: 1px solid var(--border-color); }
+    
+    .badge { padding: 4px 8px; border-radius: 20px; font-size: 0.75rem; font-weight: 700; }
+    .badge-lunas { background-color: #dcfce7; color: var(--success); }
+    .badge-belum { background-color: #fee2e2; color: var(--danger); }
+
+    /* LOADING OVERLAY */
+    #loadingOverlay {
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(15, 23, 42, 0.45); backdrop-filter: blur(4px);
+      display: none; flex-direction: column; justify-content: center; align-items: center;
+      z-index: 9999; color: white; font-weight: 600;
+    }
+    .spinner {
+      width: 40px; height: 40px;
+      border: 4px solid rgba(255, 255, 255, 0.3); border-top-color: #ffffff;
+      border-radius: 50%; animation: rotation 0.8s linear infinite; margin-bottom: 12px;
+    }
+    @keyframes rotation { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+<div id="loadingOverlay">
+  <div class="spinner"></div>
+  <div id="loadingText">Memproses data...</div>
+</div>
+
+<div class="container">
+  <!-- INDIKATOR STATUS KONEKSI & SINKRONISASI -->
+  <div id="statusBar" class="status-bar status-online">
+    <span id="koneksiTeks">Status: Online</span>
+    <span id="antreanTeks">Antrean Offline: 0</span>
+  </div>
+
+  <div class="header">
+    <h2>Kas & Iuran RT</h2>
+    <p>Pengelolaan Keuangan Rukun Tetangga</p>
+  </div>
+
+  <div class="nav-tabs">
+    <button class="tab-btn active" onclick="bukaTab(event, 'tabIuran')">Iuran Warga</button>
+    <button class="tab-btn" onclick="bukaTab(event, 'tabKas')">Kas Lain</button>
+    <button class="tab-btn" onclick="bukaTab(event, 'tabPengeluaran')">Pengeluaran</button>
+    <button class="tab-btn" onclick="bukaTab(event, 'tabCekWarga')">Cek Warga</button>
+    <button class="tab-btn" onclick="bukaTab(event, 'tabLaporan')">Laporan RT</button>
+  </div>
+
+  <!-- MENU 1: INPUT IURAN WARGA -->
+  <div id="tabIuran" class="tab-content active">
+    <form id="formIuran">
+      <div class="form-group">
+        <label>Tanggal Transaksi</label>
+        <input type="date" id="tglIuran" required>
+      </div>
+      <div class="form-group-row">
+        <div class="form-group">
+          <label>Blok</label>
+          <input type="text" id="blok" placeholder="F1" required>
+        </div>
+        <div class="form-group">
+          <label>No. Rumah</label>
+          <input type="number" id="noRumah" placeholder="1" required>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Iuran Bulan & Tahun</label>
+        <input type="month" id="blnIuran" required>
+      </div>
+      <div class="form-group">
+        <label>Jumlah Nominal (Rp)</label>
+        <input type="number" id="jmlIuran" value="50000" placeholder="50000" required>
+      </div>
+      <button type="submit" class="btn-submit">Simpan Iuran</button>
+    </form>
+  </div>
+
+  <!-- MENU 2: KAS LAIN -->
+  <div id="tabKas" class="tab-content">
+    <form id="formKas">
+      <div class="form-group">
+        <label>Tanggal Transaksi</label>
+        <input type="date" id="tglKas" required>
+      </div>
+      <div class="form-group">
+        <label>Keterangan Pemasukan</label>
+        <input type="text" id="ketKas" placeholder="Sponsor Event / Donasi" required>
+      </div>
+      <div class="form-group">
+        <label>Jumlah Nominal (Rp)</label>
+        <input type="number" id="jmlKas" placeholder="100000" required>
+      </div>
+      <button type="submit" class="btn-submit">Simpan Kas Masuk</button>
+    </form>
+  </div>
+
+  <!-- MENU 3: PENGELUARAN -->
+  <div id="tabPengeluaran" class="tab-content">
+    <form id="formPengeluaran">
+      <div class="form-group">
+        <label>Tanggal Transaksi</label>
+        <input type="date" id="tglPengeluaran" required>
+      </div>
+      <div class="form-group">
+        <label>Keterangan Pengeluaran</label>
+        <input type="text" id="ketPengeluaran" placeholder="Perbaikan Lampu Jalan" required>
+      </div>
+      <div class="form-group">
+        <label>Jumlah Nominal (Rp)</label>
+        <input type="number" id="jmlPengeluaran" placeholder="75000" required>
+      </div>
+      <button type="submit" class="btn-submit" style="background-color: var(--danger);">Simpan Pengeluaran</button>
+    </form>
+  </div>
+
+  <!-- MENU 4: CEK WARGA -->
+  <div id="tabCekWarga" class="tab-content">
+    <div class="form-group-row">
+      <div class="form-group"><label>Blok</label><input type="text" id="cekBlok" placeholder="F1"></div>
+      <div class="form-group"><label>No. Rumah</label><input type="number" id="cekNoRumah" placeholder="1"></div>
+    </div>
+    <div class="form-group"><label>Tahun</label><input type="number" id="cekTahun" value="2026"></div>
+    <button onclick="cekIuranWarga()" class="btn-submit" style="background-color: #0284c7;">Cek Status Pembayaran</button>
+
+    <div class="table-container" style="margin-top: 16px;">
+      <table id="tabelStatusWarga" style="display:none;">
+        <thead><tr><th>Bulan</th><th>Status</th><th>Tgl Bayar</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- MENU 5: LAPORAN -->
+  <div id="tabLaporan" class="tab-content">
+    <div class="form-group">
+      <label>Pilih Bulan Laporan</label>
+      <input type="month" id="filterBulan" onchange="muatLaporanKeuangan()">
+    </div>
+    <div class="summary-grid">
+      <div class="summary-card"><label>Pemasukan</label><div class="amount" style="color:var(--success);" id="totMasuk">Rp 0</div></div>
+      <div class="summary-card"><label>Pengeluaran</label><div class="amount" style="color:var(--danger);" id="totKeluar">Rp 0</div></div>
+      <div class="summary-card"><label>Saldo Akhir</label><div class="amount" style="color:var(--primary);" id="saldo">Rp 0</div></div>
+    </div>
+    <div class="table-container">
+      <table id="tabelLaporan">
+        <thead><tr><th>Tgl</th><th>Kategori</th><th>Rincian</th><th>Jumlah</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzoNNBnyomIo7IhjVUpefIUkhBpqpWeJxIR6O7AbBxtemH1iOCZ8lHOLOg9Nbj0t2nK/exec"; // Ganti dengan URL Google Apps Script Anda
+  const namaBulan = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+
+  function tampilkanLoading(pesan = "Memproses data...") {
+    document.getElementById("loadingText").innerText = pesan;
+    document.getElementById("loadingOverlay").style.display = "flex";
+  }
+
+  function sembunyikanLoading() {
+    document.getElementById("loadingOverlay").style.display = "none";
+  }
+
+  function formatTanggalIndo(dateString) {
+    if (!dateString) return "-";
+    const d = new Date(dateString);
+    if (isNaN(d.getTime())) return dateString;
+    return `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()}`;
+  }
+
+  function formatIuranBulan(bulanString) {
+    if (!bulanString) return "-";
+    const parts = bulanString.split("-");
+    if (parts.length >= 2) {
+      const indexBulan = parseInt(parts[1], 10) - 1;
+      if (indexBulan >= 0 && indexBulan < 12) return `${namaBulan[indexBulan]} ${parts[0]}`;
+    }
+    return bulanString;
+  }
+
+  function bukaTab(evt, tabName) {
+    const tabContents = document.getElementsByClassName("tab-content");
+    for (let i = 0; i < tabContents.length; i++) tabContents[i].classList.remove("active");
+    const tabBtns = document.getElementsByClassName("tab-btn");
+    for (let i = 0; i < tabBtns.length; i++) tabBtns[i].classList.remove("active");
+    document.getElementById(tabName).classList.add("active");
+    evt.currentTarget.classList.add("active");
+  }
+
+  // --- LOGIKA SINKRONISASI & OFFLINE ---
+
+  function updateStatusKoneksi() {
+    const bar = document.getElementById("statusBar");
+    const teks = document.getElementById("koneksiTeks");
+    const antrean = ambilAntreanOffline();
+    
+    document.getElementById("antreanTeks").innerText = `Antrean Offline: ${antrean.length}`;
+
+    if (navigator.onLine) {
+      bar.className = "status-bar status-online";
+      teks.innerText = "Status: Online";
+      if (antrean.length > 0) {
+        sinkronkanDataOffline();
+      }
+    } else {
+      bar.className = "status-bar status-offline";
+      teks.innerText = "Status: Offline";
+    }
+  }
+
+  window.addEventListener('online', updateStatusKoneksi);
+  window.addEventListener('offline', updateStatusKoneksi);
+
+  function ambilAntreanOffline() {
+    return JSON.parse(localStorage.getItem("antreanKasRT") || "[]");
+  }
+
+  function simpanKeAntreanOffline(payload) {
+    const antrean = ambilAntreanOffline();
+    antrean.push(payload);
+    localStorage.setItem("antreanKasRT", JSON.stringify(antrean));
+    updateStatusKoneksi();
+  }
+
+  function kirimData(payload) {
+    if (!navigator.onLine) {
+      // JIKA OFFLINE
+      simpanKeAntreanOffline(payload);
+      alert("Koneksi offline: Data berhasil disimpan sementara di HP/Laptop dan akan otomatis tersinkron saat internet tersambung.");
+      return;
+    }
+
+    // JIKA ONLINE
+    tampilkanLoading("Menyimpan ke Google Sheets...");
+    fetch(SCRIPT_URL, {
+      method: "POST",
+      mode: "no-cors",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    })
+    .then(() => {
+      setTimeout(() => {
+        sembunyikanLoading();
+        alert("Data berhasil disimpan!");
+        muatLaporanKeuangan();
+      }, 1500);
+    })
+    .catch(err => {
+      sembunyikanLoading();
+      // JIKA GAGAL SIMPAN ONLINE, SIMPAN LOKAL
+      simpanKeAntreanOffline(payload);
+      alert("Gagal terhubung ke server. Data disimpan di antrean offline.");
+    });
+  }
+
+  // SINKRONISASI OTOMATIS SAAT INTERNET TERHUBUNG KEMBALI
+  async function sinkronkanDataOffline() {
+    const antrean = ambilAntreanOffline();
+    if (antrean.length === 0) return;
+
+    tampilkanLoading(`Menyinkronkan ${antrean.length} data offline...`);
+
+    for (let i = 0; i < antrean.length; i++) {
+      try {
+        await fetch(SCRIPT_URL, {
+          method: "POST",
+          mode: "no-cors",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(antrean[i])
+        });
+      } catch (e) {
+        console.error("Gagal sinkron data ke-", i, e);
+      }
+    }
+
+    // KOSONGKAN ANTREAN SETELAH DIUNGGAH
+    localStorage.removeItem("antreanKasRT");
+    sembunyikanLoading();
+    updateStatusKoneksi();
+    alert("Semua data offline berhasil tersinkron ke Google Sheets!");
+    muatLaporanKeuangan();
+  }
+
+  // EVENT FORM SUBMIT
+  document.getElementById("formKas").onsubmit = (e) => {
+    e.preventDefault();
+    kirimData({
+      action: "inputKas",
+      tanggal: document.getElementById("tglKas").value,
+      keterangan: document.getElementById("ketKas").value,
+      jumlah: Number(document.getElementById("jmlKas").value)
+    });
+    e.target.reset();
+  };
+
+  document.getElementById("formIuran").onsubmit = (e) => {
+    e.preventDefault();
+    kirimData({
+      action: "inputIuran",
+      tanggal: document.getElementById("tglIuran").value,
+      blok: document.getElementById("blok").value.trim().toUpperCase(),
+      noRumah: document.getElementById("noRumah").value.trim(),
+      bulan: document.getElementById("blnIuran").value,
+      jumlah: Number(document.getElementById("jmlIuran").value)
+    });
+    e.target.reset();
+    document.getElementById("jmlIuran").value = "50000";
+  };
+
+  document.getElementById("formPengeluaran").onsubmit = (e) => {
+    e.preventDefault();
+    kirimData({
+      action: "inputPengeluaran",
+      tanggal: document.getElementById("tglPengeluaran").value,
+      keterangan: document.getElementById("ketPengeluaran").value,
+      jumlah: Number(document.getElementById("jmlPengeluaran").value)
+    });
+    e.target.reset();
+  };
+
+  function cekIuranWarga() {
+    const blok = document.getElementById("cekBlok").value.trim().toUpperCase();
+    const noRumah = document.getElementById("cekNoRumah").value.trim();
+    const tahun = document.getElementById("cekTahun").value.trim();
+
+    if (!blok || !noRumah || !tahun) {
+      alert("Lengkapi Blok, No. Rumah, dan Tahun.");
+      return;
+    }
+
+    tampilkanLoading("Mengecek data warga...");
+
+    fetch(SCRIPT_URL)
+      .then(res => res.json())
+      .then(data => {
+        sembunyikanLoading();
+        const tabel = document.getElementById("tabelStatusWarga");
+        const tbody = tabel.querySelector("tbody");
+        tbody.innerHTML = "";
+        tabel.style.display = "table";
+
+        const iuranRumah = data.iuran.filter(row => {
+          return String(row[1]).toUpperCase() === blok && String(row[2]) === noRumah && String(row[3]).substring(0, 4) === tahun;
+        });
+
+        for (let i = 1; i <= 12; i++) {
+          const bulanFormat = `${tahun}-${String(i).padStart(2, '0')}`;
+          const transaksi = iuranRumah.find(row => String(row[3]).substring(0, 7) === bulanFormat);
+
+          if (transaksi) {
+            tbody.innerHTML += `<tr><td>${namaBulan[i - 1]}</td><td><span class="badge badge-lunas">LUNAS</span></td><td>${formatTanggalIndo(transaksi[0])}</td></tr>`;
+          } else {
+            tbody.innerHTML += `<tr><td>${namaBulan[i - 1]}</td><td><span class="badge badge-belum">BELUM</span></td><td>-</td></tr>`;
+          }
+        }
+      })
+      .catch(err => {
+        sembunyikanLoading();
+        alert("Pencarian laporan membutuhkan koneksi internet.");
+      });
+  }
+
+  function muatLaporanKeuangan() {
+    const filterBulan = document.getElementById("filterBulan").value;
+    if (!filterBulan) return;
+
+    tampilkanLoading("Memuat laporan...");
+
+    fetch(SCRIPT_URL)
+      .then(res => res.json())
+      .then(data => {
+        sembunyikanLoading();
+        let tbody = document.querySelector("#tabelLaporan tbody");
+        tbody.innerHTML = "";
+        let totalMasuk = 0, totalKeluar = 0;
+
+        data.kas.forEach(row => {
+          if (String(row[0]).substring(0, 7) === filterBulan) {
+            totalMasuk += Number(row[2]);
+            tbody.innerHTML += `<tr><td>${formatTanggalIndo(row[0])}</td><td>Kas</td><td>${row[1]}</td><td>Rp ${Number(row[2]).toLocaleString()}</td></tr>`;
+          }
+        });
+
+        data.iuran.forEach(row => {
+          if (String(row[0]).substring(0, 7) === filterBulan) {
+            totalMasuk += Number(row[4]);
+            const blnTeks = formatIuranBulan(String(row[3]));
+            tbody.innerHTML += `<tr><td>${formatTanggalIndo(row[0])}</td><td>Iuran</td><td>Blok ${row[1]} No ${row[2]} (${blnTeks})</td><td>Rp ${Number(row[4]).toLocaleString()}</td></tr>`;
+          }
+        });
+
+        data.pengeluaran.forEach(row => {
+          if (String(row[0]).substring(0, 7) === filterBulan) {
+            totalKeluar += Number(row[2]);
+            tbody.innerHTML += `<tr><td>${formatTanggalIndo(row[0])}</td><td>Keluar</td><td>${row[1]}</td><td style="color:var(--danger);">-Rp ${Number(row[2]).toLocaleString()}</td></tr>`;
+          }
+        });
+
+        document.getElementById("totMasuk").innerText = `Rp ${totalMasuk.toLocaleString()}`;
+        document.getElementById("totKeluar").innerText = `Rp ${totalKeluar.toLocaleString()}`;
+        document.getElementById("saldo").innerText = `Rp ${(totalMasuk - totalKeluar).toLocaleString()}`;
+      })
+      .catch(err => {
+        sembunyikanLoading();
+      });
+  }
+
+  // INISIALISASI
+  updateStatusKoneksi();
+</script>
+</body>
+</html>
