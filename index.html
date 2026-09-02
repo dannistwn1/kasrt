@@ -670,6 +670,27 @@
   // INISIALISASI SAAT HALAMAN DIBUKA
   setTanggalDefaultForm();
   updateStatusKoneksi();
+
+  // REGISTRASI SERVICE WORKER DENGAN AUTO-RELOAD SAAT ADA UPDATE
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').then((reg) => {
+      // Cek apakah ada pembaruan Service Worker baru dari GitHub
+      reg.onupdatefound = () => {
+        const installingWorker = reg.installing;
+        installingWorker.onstatechange = () => {
+          if (installingWorker.state === 'installed') {
+            if (navigator.serviceWorker.controller) {
+              // Jika versi baru terdeteksi, beri tahu pengguna & reload halaman
+              alert("Versi baru aplikasi tersedia! Halaman akan diperbarui otomatis.");
+              window.location.reload();
+            }
+          }
+        };
+      };
+    });
+  });
+}
 </script>
 </body>
 </html>
