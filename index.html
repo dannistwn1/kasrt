@@ -597,6 +597,47 @@
     e.target.reset();
   };
 
+  // function cekIuranWarga() {
+  //   const blok = document.getElementById("cekBlok").value.trim().toUpperCase();
+  //   const noRumah = document.getElementById("cekNoRumah").value.trim();
+  //   const tahun = document.getElementById("cekTahun").value.trim();
+
+  //   if (!blok || !noRumah || !tahun) {
+  //     alert("Lengkapi Blok, No. Rumah, dan Tahun.");
+  //     return;
+  //   }
+
+  //   tampilkanLoading("Mengecek data warga...");
+
+  //   fetch(SCRIPT_URL)
+  //     .then(res => res.json())
+  //     .then(data => {
+  //       sembunyikanLoading();
+  //       const tabel = document.getElementById("tabelStatusWarga");
+  //       const tbody = tabel.querySelector("tbody");
+  //       tbody.innerHTML = "";
+  //       tabel.style.display = "table";
+
+  //       const iuranRumah = data.iuran.filter(row => {
+  //         return String(row[1]).toUpperCase() === blok && String(row[2]) === noRumah && String(row[3]).substring(0, 4) === tahun;
+  //       });
+
+  //       for (let i = 1; i <= 12; i++) {
+  //         const bulanFormat = `${tahun}-${String(i).padStart(2, '0')}`;
+  //         const transaksi = iuranRumah.find(row => String(row[3]).substring(0, 7) === bulanFormat);
+
+  //         if (transaksi) {
+  //           tbody.innerHTML += `<tr><td>${namaBulan[i - 1]}</td><td><span class="badge badge-lunas">LUNAS</span></td><td>${formatTanggalIndo(transaksi[0])}</td></tr>`;
+  //         } else {
+  //           tbody.innerHTML += `<tr><td>${namaBulan[i - 1]}</td><td><span class="badge badge-belum">BELUM</span></td><td>-</td></tr>`;
+  //         }
+  //       }
+  //     })
+  //     .catch(err => {
+  //       sembunyikanLoading();
+  //       alert("Pencarian laporan membutuhkan koneksi internet.");
+  //     });
+  // }
   function cekIuranWarga() {
     const blok = document.getElementById("cekBlok").value.trim().toUpperCase();
     const noRumah = document.getElementById("cekNoRumah").value.trim();
@@ -619,12 +660,25 @@
         tabel.style.display = "table";
 
         const iuranRumah = data.iuran.filter(row => {
-          return String(row[1]).toUpperCase() === blok && String(row[2]) === noRumah && String(row[3]).substring(0, 4) === tahun;
+          return String(row[1]).toUpperCase() === blok && String(row[2]) === noRumah;
         });
 
         for (let i = 1; i <= 12; i++) {
-          const bulanFormat = `${tahun}-${String(i).padStart(2, '0')}`;
-          const transaksi = iuranRumah.find(row => String(row[3]).substring(0, 7) === bulanFormat);
+          const bulanDuaDigit = String(i).padStart(2, '0');
+          const kodeBulanCari = `${tahun}-${bulanDuaDigit}`;
+
+          // Mencari data yang cocok berdasarkan string YYYY-MM agar aman dari timezone
+          const transaksi = iuranRumah.find(row => {
+            const rawBulan = String(row[3]);
+            // Menangani format jika terlanjur berformat ISO UTC dari Google Sheets
+            if (rawBulan.includes("T")) {
+              const d = new Date(rawBulan);
+              const y = d.getFullYear();
+              const m = String(d.getMonth() + 1).padStart(2, '0');
+              return `${y}-${m}` === kodeBulanCari;
+            }
+            return rawBulan.substring(0, 7) === kodeBulanCari;
+          });
 
           if (transaksi) {
             tbody.innerHTML += `<tr><td>${namaBulan[i - 1]}</td><td><span class="badge badge-lunas">LUNAS</span></td><td>${formatTanggalIndo(transaksi[0])}</td></tr>`;
