@@ -152,20 +152,47 @@
       to { opacity: 1; transform: translateY(0); }
     }
 
-    /* FORM STYLING */
-    .form-group { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
-    label { font-size: 0.8rem; font-weight: 600; color: var(--text-main); text-transform: uppercase; }
-    input { 
+    /* FORM STYLING - PERBAIKAN LEBAR INPUT MOBILES */
+    .form-group { 
+      display: flex; 
+      flex-direction: column; 
+      gap: 6px; 
+      margin-bottom: 14px; 
       width: 100%; 
-      padding: 12px 14px; 
+    }
+    
+    label { font-size: 0.8rem; font-weight: 600; color: var(--text-main); text-transform: uppercase; }
+    
+    input, select { 
+      width: 100%; 
+      max-width: 100%;
+      box-sizing: border-box;
+      padding: 10px 12px; 
       border: 1px solid var(--border-color); 
       border-radius: 8px; 
-      font-size: 0.95rem; 
+      font-size: 0.9rem; 
       background-color: #fafafa;
+      -webkit-appearance: none;
+      appearance: none;
     }
+
+    input[type="date"], input[type="month"] {
+      min-height: 42px;
+      background-color: #ffffff;
+    }
+
     input:focus { outline: none; border-color: var(--primary); background-color: #fff; }
-    .form-group-row { display: flex; gap: 12px; }
-    .form-group-row > div { flex: 1; }
+    
+    .form-group-row { 
+      display: flex; 
+      gap: 10px; 
+      width: 100%;
+    }
+    
+    .form-group-row > div { 
+      flex: 1; 
+      min-width: 0;
+    }
     
     button.btn-submit { 
       width: 100%;
@@ -365,10 +392,9 @@
 </div>
 
 <script>
-  const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzoNNBnyomIo7IhjVUpefIUkhBpqpWeJxIR6O7AbBxtemH1iOCZ8lHOLOg9Nbj0t2nK/exec"; // Ganti dengan URL Google Apps Script Anda
+  const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzoNNBnyomIo7IhjVUpefIUkhBpqpWeJxIR6O7AbBxtemH1iOCZ8lHOLOg9Nbj0t2nK/exec";
   const namaBulan = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
 
-  // --- HELPER MENDAPATKAN TANGGAL & BULAN HARI INI ---
   function dapatkanTanggalHariIni() {
     const today = new Date();
     const yyyy = today.getFullYear();
@@ -397,7 +423,6 @@
     document.getElementById("cekTahun").value = new Date().getFullYear();
   }
 
-  // --- LOGIKA SIDEBAR HIDE / SHOW ---
   function toggleSidebar() {
     document.getElementById("sidebar").classList.toggle("open");
     document.getElementById("sidebarOverlay").classList.toggle("active");
@@ -420,13 +445,6 @@
     document.getElementById("judulHalaman").innerText = judul;
     
     closeSidebar();
-  }
-
-  // --- LOGIKA UTAMA & OFFLINE SUPPORT ---
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./sw.js').catch(err => console.log('SW Error:', err));
-    });
   }
 
   function tampilkanLoading(pesan = "Memproses data...") {
@@ -543,7 +561,6 @@
     muatLaporanKeuangan();
   }
 
-  // EVENT FORM
   document.getElementById("formKas").onsubmit = (e) => {
     e.preventDefault();
     kirimData({
@@ -667,30 +684,26 @@
       });
   }
 
-  // INISIALISASI SAAT HALAMAN DIBUKA
   setTanggalDefaultForm();
   updateStatusKoneksi();
 
-  // REGISTRASI SERVICE WORKER DENGAN AUTO-RELOAD SAAT ADA UPDATE
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js').then((reg) => {
-      // Cek apakah ada pembaruan Service Worker baru dari GitHub
-      reg.onupdatefound = () => {
-        const installingWorker = reg.installing;
-        installingWorker.onstatechange = () => {
-          if (installingWorker.state === 'installed') {
-            if (navigator.serviceWorker.controller) {
-              // Jika versi baru terdeteksi, beri tahu pengguna & reload halaman
-              alert("Versi baru aplikasi tersedia! Halaman akan diperbarui otomatis.");
-              window.location.reload();
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js').then((reg) => {
+        reg.onupdatefound = () => {
+          const installingWorker = reg.installing;
+          installingWorker.onstatechange = () => {
+            if (installingWorker.state === 'installed') {
+              if (navigator.serviceWorker.controller) {
+                alert("Versi baru aplikasi tersedia! Halaman akan diperbarui otomatis.");
+                window.location.reload();
+              }
             }
-          }
+          };
         };
-      };
+      });
     });
-  });
-}
+  }
 </script>
 </body>
 </html>
