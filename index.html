@@ -213,7 +213,6 @@
       margin-top: 8px;
     }
 
-    /* HEADER FORM KANAN ATAS UNTUK TOMBOL RESET */
     .form-header-row {
       display: flex;
       justify-content: space-between;
@@ -352,11 +351,16 @@
     <span id="antreanTeks">Antrean Offline: 0</span>
   </div>
 
+  <!-- INPUT IDENTITAS PETUGAS/PERANGKAT TERINTEGRASI -->
+  <div class="form-group" style="background: #eff6ff; padding: 12px; border-radius: 10px; border: 1px solid #bfdbfe; margin-bottom: 16px;">
+    <label style="color: var(--primary);">Nama Petugas / Pengurus (HP Ini)</label>
+    <input type="text" id="namaPetugas" placeholder="Contoh: Pak Bendahara / Budi" onchange="simpanNamaPetugasLokal(this.value)">
+  </div>
+
   <!-- MENU 1: INPUT IURAN WARGA -->
   <div id="tabIuran" class="tab-content active">
     <form id="formIuran">
       <div class="form-group">
-        <!-- BARIS LABEL + TOMBOL RESET DI KANAN ATAS -->
         <div class="form-header-row">
           <label style="margin-bottom: 0;">Tanggal Transaksi</label>
           <button type="button" class="btn-reset-top" onclick="resetFormIuran()">↺ Reset Form</button>
@@ -505,6 +509,23 @@
   
   let cacheDataServer = { kas: [], iuran: [], pengeluaran: [] };
 
+  function simpanNamaPetugasLokal(val) {
+    localStorage.setItem("namaPetugasKasRT", val);
+  }
+
+  function ambilIdentitasPerangkat() {
+    const namaInput = document.getElementById("namaPetugas").value.trim();
+    if (namaInput) return namaInput;
+
+    // Jika nama tidak diisi, ambil info dasar HP/Perangkat
+    const ua = navigator.userAgent;
+    let deviceType = "Desktop/Lainnya";
+    if (/Android/i.test(ua)) deviceType = "Android";
+    else if (/iPhone|iPad|iPod/i.test(ua)) deviceType = "iOS/iPhone";
+
+    return `Anonim (${deviceType})`;
+  }
+
   function dapatkanTanggalHariIni() {
     const today = new Date();
     const yyyy = today.getFullYear();
@@ -533,6 +554,9 @@
     document.getElementById("cekTahun").value = tahunIni;
     document.getElementById("filterBulan").value = bulanIni;
     
+    const savedName = localStorage.getItem("namaPetugasKasRT");
+    if (savedName) document.getElementById("namaPetugas").value = savedName;
+
     perbaruiDropdownBulanFilter();
   }
 
@@ -699,6 +723,9 @@
   }
 
   function kirimData(payload) {
+    // Sisipkan nama petugas / identitas perangkat pada setiap transaksi
+    payload.petugas = ambilIdentitasPerangkat();
+
     if (payload.action === "inputIuran") {
       if (!cacheDataServer.iuran) cacheDataServer.iuran = [];
       cacheDataServer.iuran.push([
