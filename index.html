@@ -351,12 +351,6 @@
     <span id="antreanTeks">Antrean Offline: 0</span>
   </div>
 
-  <!-- INPUT IDENTITAS PETUGAS/PERANGKAT TERINTEGRASI -->
-  <div class="form-group" style="background: #eff6ff; padding: 12px; border-radius: 10px; border: 1px solid #bfdbfe; margin-bottom: 16px;">
-    <label style="color: var(--primary);">Nama Petugas / Pengurus (HP Ini)</label>
-    <input type="text" id="namaPetugas" placeholder="Contoh: Pak Bendahara / Budi" onchange="simpanNamaPetugasLokal(this.value)">
-  </div>
-
   <!-- MENU 1: INPUT IURAN WARGA -->
   <div id="tabIuran" class="tab-content active">
     <form id="formIuran">
@@ -509,21 +503,36 @@
   
   let cacheDataServer = { kas: [], iuran: [], pengeluaran: [] };
 
-  function simpanNamaPetugasLokal(val) {
-    localStorage.setItem("namaPetugasKasRT", val);
+  // FUNGSI MEMBUAT/AMBIL DEVICE ID UNIK DARI HP
+  function dapatkanDeviceId() {
+    let deviceId = localStorage.getItem("rt_device_id");
+    if (!deviceId) {
+      deviceId = "DEV-" + Math.floor(1000 + Math.random() * 9000);
+      localStorage.setItem("rt_device_id", deviceId);
+    }
+    return deviceId;
   }
 
-  function ambilIdentitasPerangkat() {
-    const namaInput = document.getElementById("namaPetugas").value.trim();
-    if (namaInput) return namaInput;
-
-    // Jika nama tidak diisi, ambil info dasar HP/Perangkat
+  // FUNGSI DETEKSI SISTEM OPERASI & BROWSER SECARA OTOMATIS
+  function ambilIdentitasPerangkatOtomatis() {
     const ua = navigator.userAgent;
-    let deviceType = "Desktop/Lainnya";
-    if (/Android/i.test(ua)) deviceType = "Android";
-    else if (/iPhone|iPad|iPod/i.test(ua)) deviceType = "iOS/iPhone";
+    let os = "Desktop/Lainnya";
+    
+    if (/Android/i.test(ua)) os = "Android";
+    else if (/iPhone|iPad|iPod/i.test(ua)) os = "iOS";
+    else if (/Windows/i.test(ua)) os = "Windows";
+    else if (/Macintosh/i.test(ua)) os = "MacOS";
 
-    return `Anonim (${deviceType})`;
+    let browser = "Browser";
+    if (/Chrome/i.test(ua) && !/Edg/i.test(ua)) browser = "Chrome";
+    else if (/Safari/i.test(ua) && !/Chrome/i.test(ua)) browser = "Safari";
+    else if (/Firefox/i.test(ua)) browser = "Firefox";
+    else if (/Edg/i.test(ua)) browser = "Edge";
+
+    const deviceId = dapatkanDeviceId();
+
+    // Format output: "DEV-1234 (Android/Chrome)"
+    return `${deviceId} (${os}/${browser})`;
   }
 
   function dapatkanTanggalHariIni() {
@@ -553,9 +562,6 @@
     document.getElementById("thnIuran").value = tahunIni;
     document.getElementById("cekTahun").value = tahunIni;
     document.getElementById("filterBulan").value = bulanIni;
-    
-    const savedName = localStorage.getItem("namaPetugasKasRT");
-    if (savedName) document.getElementById("namaPetugas").value = savedName;
 
     perbaruiDropdownBulanFilter();
   }
@@ -723,8 +729,8 @@
   }
 
   function kirimData(payload) {
-    // Sisipkan nama petugas / identitas perangkat pada setiap transaksi
-    payload.petugas = ambilIdentitasPerangkat();
+    // MENYISIPKAN IDENTITAS PERANGKAT OTOMATIS
+    payload.petugas = ambilIdentitasPerangkatOtomatis();
 
     if (payload.action === "inputIuran") {
       if (!cacheDataServer.iuran) cacheDataServer.iuran = [];
@@ -734,14 +740,15 @@
         payload.noRumah,
         payload.bulan,
         payload.jumlah,
-        "-"
+        "-",
+        payload.petugas
       ]);
     } else if (payload.action === "inputKas") {
       if (!cacheDataServer.kas) cacheDataServer.kas = [];
-      cacheDataServer.kas.push([payload.tanggal, payload.keterangan, payload.jumlah]);
+      cacheDataServer.kas.push([payload.tanggal, payload.keterangan, payload.jumlah, payload.petugas]);
     } else if (payload.action === "inputPengeluaran") {
       if (!cacheDataServer.pengeluaran) cacheDataServer.pengeluaran = [];
-      cacheDataServer.pengeluaran.push([payload.tanggal, payload.keterangan, payload.jumlah]);
+      cacheDataServer.pengeluaran.push([payload.tanggal, payload.keterangan, payload.jumlah, payload.petugas]);
     }
 
     if (!navigator.onLine) {
