@@ -229,29 +229,13 @@
     .badge-belum { background-color: #fee2e2; color: var(--danger); }
 
     /* LOADING OVERLAY */
-   /* #loadingOverlay {
+    #loadingOverlay {
       position: fixed;
       top: 0; left: 0; width: 100%; height: 100%;
       background: rgba(15, 23, 42, 0.45); backdrop-filter: blur(4px);
-      display: none; flex-direction: column; justify-content: center; align-align: center;
+      display: none; flex-direction: column; justify-content: center; align-items: center;
       z-index: 9999; color: white; font-weight: 600;
-    }*/
-    #loadingOverlay {
-  position: fixed;
-  top: 0; 
-  left: 0; 
-  width: 100%; 
-  height: 100%;
-  background: rgba(15, 23, 42, 0.45); 
-  backdrop-filter: blur(4px);
-  display: none; 
-  flex-direction: column; 
-  justify-content: center; 
-  align-items: center; /* Diubah menjadi align-items */
-  z-index: 9999; 
-  color: white; 
-  font-weight: 600;
-}
+    }
     .spinner {
       width: 40px; height: 40px;
       border: 4px solid rgba(255, 255, 255, 0.3); border-top-color: #ffffff;
@@ -326,7 +310,6 @@
         </div>
       </div>
 
-      <!-- PERUBAHAN: INPUT BULAN DAN TAHUN DIPISAH -->
       <div class="form-group-row">
         <div class="form-group">
           <label>Pilih Bulan</label>
@@ -416,10 +399,23 @@
 
   <!-- MENU 5: LAPORAN -->
   <div id="tabLaporan" class="tab-content">
-    <div class="form-group">
-      <label>Pilih Bulan Laporan</label>
-      <input type="month" id="filterBulan" onchange="muatLaporanKeuangan()">
+    <div class="form-group-row">
+      <div class="form-group">
+        <label>Pilih Bulan</label>
+        <input type="month" id="filterBulan" onchange="muatLaporanKeuangan()">
+      </div>
+      <!-- PENAMBAHAN: FILTER KATEGORI PADA LAPORAN -->
+      <div class="form-group">
+        <label>Kategori</label>
+        <select id="filterKategori" onchange="muatLaporanKeuangan()">
+          <option value="semua">Semua Transaksi</option>
+          <option value="Kas">Kas Masuk</option>
+          <option value="Iuran">Iuran Warga</option>
+          <option value="Keluar">Pengeluaran</option>
+        </select>
+      </div>
     </div>
+
     <div class="summary-grid">
       <div class="summary-card"><label>Pemasukan</label><div class="amount" style="color:var(--success);" id="totMasuk">Rp 0</div></div>
       <div class="summary-card"><label>Pengeluaran</label><div class="amount" style="color:var(--danger);" id="totKeluar">Rp 0</div></div>
@@ -465,7 +461,6 @@
     document.getElementById("tglKas").value = hariIni;
     document.getElementById("tglPengeluaran").value = hariIni;
     
-    // DEFAULT TAHUN IURAN & CEK TAHUN KE TAHUN SEKARANG
     document.getElementById("thnIuran").value = tahunIni;
     document.getElementById("cekTahun").value = tahunIni;
     document.getElementById("filterBulan").value = bulanIni;
@@ -493,6 +488,10 @@
     document.getElementById(tabName).classList.add("active");
     evt.currentTarget.classList.add("active");
     document.getElementById("judulHalaman").innerText = judul;
+
+    if (tabName === 'tabLaporan') {
+      muatLaporanKeuangan();
+    }
     
     closeSidebar();
   }
@@ -534,7 +533,6 @@
     }
   }
 
-  // MENYARING DAN MENAMPILKAN HANYA BULAN YG BELUM DIBAYAR UNTUK TAHUN YANG DIPILIH
   function perbaruiDropdownBulanFilter() {
     const blok = document.getElementById("blok").value.trim().toUpperCase();
     const noRumah = document.getElementById("noRumah").value.trim();
@@ -568,19 +566,17 @@
     }
 
     let opsiDibuat = 0;
-    const bulanSekarangIndex = new Date().getMonth() + 1; // 1-12
+    const bulanSekarangIndex = new Date().getMonth() + 1;
 
     for (let m = 1; m <= 12; m++) {
       const duaDigitM = String(m).padStart(2, '0');
       const kodeBulan = `${tahunPilihan}-${duaDigitM}`;
       
-      // HANYA TAMPILKAN BULAN YANG BELUM DIBAYAR
       if (!bulanTerbayarSet.has(kodeBulan)) {
         const opt = document.createElement("option");
-        opt.value = duaDigitM; // Menyimpan hanya format dua digit bulan (misal: "01", "02")
+        opt.value = duaDigitM;
         opt.innerText = namaBulan[m - 1];
         
-        // Pilih otomatis bulan berjalan jika belum dibayar
         if (m === bulanSekarangIndex) opt.selected = true;
         
         selectBulan.appendChild(opt);
@@ -705,7 +701,6 @@
     e.target.reset();
   };
 
-  // KETIKA SIMPAN IURAN, FORMAT BULAN & TAHUN DIGABUNG DUA-DUANYA MENJADI "YYYY-MM" SBLM DIKIRIM KE SHEET
   document.getElementById("formIuran").onsubmit = async (e) => {
     e.preventDefault();
     
@@ -719,10 +714,8 @@
       return;
     }
 
-    // Gabungkan menjadi format "YYYY-MM"
     const kodeBulanLengkap = `${tahunInput}-${bulanDuaDigit}`;
 
-    // Validasi ulang ganda
     if (cacheDataServer && cacheDataServer.iuran) {
       const sudahLunas = cacheDataServer.iuran.some(row => {
         const isSamaRumah = String(row[1]).toUpperCase() === blok && String(row[2]) === noRumah;
@@ -761,7 +754,7 @@
       tanggal: document.getElementById("tglIuran").value,
       blok: blok,
       noRumah: noRumah,
-      bulan: kodeBulanLengkap, // Tetap dikirim sebagai "YYYY-MM" agar format Google Sheets tidak berubah
+      bulan: kodeBulanLengkap,
       jumlah: Number(document.getElementById("jmlIuran").value),
       bukti: fileData
     });
@@ -854,8 +847,10 @@
       });
   }
 
+  // PENAMBAHAN: FUNGSI MUAT LAPORAN KEUANGAN DENGAN FILTER KATEGORI
   function muatLaporanKeuangan() {
     const filterBulan = document.getElementById("filterBulan").value;
+    const filterKategori = document.getElementById("filterKategori").value;
     if (!filterBulan) return;
 
     tampilkanLoading("Memuat laporan...");
@@ -869,31 +864,51 @@
         tbody.innerHTML = "";
         let totalMasuk = 0, totalKeluar = 0;
 
-        data.kas.forEach(row => {
-          if (String(row[0]).substring(0, 7) === filterBulan) {
-            totalMasuk += Number(row[2]);
-            tbody.innerHTML += `<tr><td>${formatTanggalIndo(row[0])}</td><td>Kas</td><td>${row[1]}</td><td>Rp ${Number(row[2]).toLocaleString()}</td></tr>`;
-          }
-        });
+        // 1. Kas Masuk
+        if (filterKategori === "semua" || filterKategori === "Kas") {
+          data.kas.forEach(row => {
+            if (String(row[0]).substring(0, 7) === filterBulan) {
+              totalMasuk += Number(row[2]);
+              tbody.innerHTML += `<tr><td>${formatTanggalIndo(row[0])}</td><td>Kas</td><td>${row[1]}</td><td>Rp ${Number(row[2]).toLocaleString()}</td></tr>`;
+            }
+          });
+        }
 
-        data.iuran.forEach(row => {
-          if (String(row[0]).substring(0, 7) === filterBulan) {
-            totalMasuk += Number(row[4]);
-            const blnTeks = formatIuranBulan(String(row[3]));
-            tbody.innerHTML += `<tr><td>${formatTanggalIndo(row[0])}</td><td>Iuran</td><td>Blok ${row[1]} No ${row[2]} (${blnTeks})</td><td>Rp ${Number(row[4]).toLocaleString()}</td></tr>`;
-          }
-        });
+        // 2. Iuran Warga
+        if (filterKategori === "semua" || filterKategori === "Iuran") {
+          data.iuran.forEach(row => {
+            if (String(row[0]).substring(0, 7) === filterBulan) {
+              totalMasuk += Number(row[4]);
+              const blnTeks = formatIuranBulan(String(row[3]));
+              tbody.innerHTML += `<tr><td>${formatTanggalIndo(row[0])}</td><td>Iuran</td><td>Blok ${row[1]} No ${row[2]} (${blnTeks})</td><td>Rp ${Number(row[4]).toLocaleString()}</td></tr>`;
+            }
+          });
+        }
 
-        data.pengeluaran.forEach(row => {
-          if (String(row[0]).substring(0, 7) === filterBulan) {
-            totalKeluar += Number(row[2]);
-            tbody.innerHTML += `<tr><td>${formatTanggalIndo(row[0])}</td><td>Keluar</td><td>${row[1]}</td><td style="color:var(--danger);">-Rp ${Number(row[2]).toLocaleString()}</td></tr>`;
-          }
-        });
+        // 3. Pengeluaran
+        if (filterKategori === "semua" || filterKategori === "Keluar") {
+          data.pengeluaran.forEach(row => {
+            if (String(row[0]).substring(0, 7) === filterBulan) {
+              totalKeluar += Number(row[2]);
+              tbody.innerHTML += `<tr><td>${formatTanggalIndo(row[0])}</td><td>Keluar</td><td>${row[1]}</td><td style="color:var(--danger);">-Rp ${Number(row[2]).toLocaleString()}</td></tr>`;
+            }
+          });
+        }
 
-        document.getElementById("totMasuk").innerText = `Rp ${totalMasuk.toLocaleString()}`;
-        document.getElementById("totKeluar").innerText = `Rp ${totalKeluar.toLocaleString()}`;
-        document.getElementById("saldo").innerText = `Rp ${(totalMasuk - totalKeluar).toLocaleString()}`;
+        // Hitung nominal jika disaring per kategori khusus
+        if (filterKategori === "Kas" || filterKategori === "Iuran") {
+          document.getElementById("totMasuk").innerText = `Rp ${totalMasuk.toLocaleString()}`;
+          document.getElementById("totKeluar").innerText = `Rp 0`;
+          document.getElementById("saldo").innerText = `Rp ${totalMasuk.toLocaleString()}`;
+        } else if (filterKategori === "Keluar") {
+          document.getElementById("totMasuk").innerText = `Rp 0`;
+          document.getElementById("totKeluar").innerText = `Rp ${totalKeluar.toLocaleString()}`;
+          document.getElementById("saldo").innerText = `-Rp ${totalKeluar.toLocaleString()}`;
+        } else {
+          document.getElementById("totMasuk").innerText = `Rp ${totalMasuk.toLocaleString()}`;
+          document.getElementById("totKeluar").innerText = `Rp ${totalKeluar.toLocaleString()}`;
+          document.getElementById("saldo").innerText = `Rp ${(totalMasuk - totalKeluar).toLocaleString()}`;
+        }
       })
       .catch(err => {
         sembunyikanLoading();
