@@ -452,7 +452,6 @@
       </div>
     </div>
 
-    <!-- PENAMBAHAN: TOMBOL REFRESH MANUAL -->
     <button onclick="muatLaporanKeuangan(true)" class="btn-refresh">🔄 Refresh Data Laporan</button>
 
     <div class="summary-grid">
@@ -474,7 +473,8 @@
   const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzoNNBnyomIo7IhjVUpefIUkhBpqpWeJxIR6O7AbBxtemH1iOCZ8lHOLOg9Nbj0t2nK/exec";
   const namaBulan = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
   
-  let cacheDataServer = null;
+  // Inisialisasi struktur cache lokal default agar tidak crash saat offline
+  let cacheDataServer = { kas: [], iuran: [], pengeluaran: [] };
 
   function dapatkanTanggalHariIni() {
     const today = new Date();
@@ -504,7 +504,7 @@
     document.getElementById("cekTahun").value = tahunIni;
     document.getElementById("filterBulan").value = bulanIni;
     
-    muatDataServer();
+    perbaruiDropdownBulanFilter();
   }
 
   function toggleSidebar() {
@@ -565,8 +565,11 @@
     if (!navigator.onLine) return;
     try {
       const res = await fetch(SCRIPT_URL);
-      cacheDataServer = await res.json();
-      perbaruiDropdownBulanFilter();
+      const data = await res.json();
+      if (data) {
+        cacheDataServer = data;
+        perbaruiDropdownBulanFilter();
+      }
     } catch (e) {
       console.error("Gagal memperbarui cache data server", e);
     }
@@ -578,6 +581,7 @@
     const tahunPilihan = document.getElementById("thnIuran").value.trim();
     const selectBulan = document.getElementById("blnIuran");
 
+    if (!selectBulan) return;
     selectBulan.innerHTML = "";
 
     if (!blok || !noRumah || !tahunPilihan) {
@@ -659,8 +663,28 @@
     updateStatusKoneksi();
   }
 
-  // TANPA RE-FETCH ATAU PEMANGGILAN LAPORAN OTOMATIS
+  // DI-UPDATE: MENDUKUNG PEMBARUAN CACHE LOKAL BAIK ONLINE MAUPUN OFFLINE
   function kirimData(payload) {
+    // 1. Perbarui cache lokal lebih dahulu agar dropdown bulan dan laporan selalu up to date
+    if (payload.action === "inputIuran") {
+      if (!cacheDataServer.iuran) cacheDataServer.iuran = [];
+      cacheDataServer.iuran.push([
+        payload.tanggal,
+        payload.blok,
+        payload.noRumah,
+        payload.bulan,
+        payload.jumlah,
+        "-"
+      ]);
+    } else if (payload.action === "inputKas") {
+      if (!cacheDataServer.kas) cacheDataServer.kas = [];
+      cacheDataServer.kas.push([payload.tanggal, payload.keterangan, payload.jumlah]);
+    } else if (payload.action === "inputPengeluaran") {
+      if (!cacheDataServer.pengeluaran) cacheDataServer.pengeluaran = [];
+      cacheDataServer.pengeluaran.push([payload.tanggal, payload.keterangan, payload.jumlah]);
+    }
+
+    // 2. Jika offline, simpan ke antrean lalu reset form
     if (!navigator.onLine) {
       simpanKeAntreanOffline(payload);
       alert("Koneksi offline: Data disimpan sementara di HP.");
@@ -668,6 +692,7 @@
       return;
     }
 
+    // 3. Jika online, kirim ke Apps Script
     tampilkanLoading("Menyimpan...");
     fetch(SCRIPT_URL, {
       method: "POST",
@@ -678,22 +703,6 @@
     .then(() => {
       sembunyikanLoading();
       alert("Data berhasil diproses!");
-
-      if (payload.action === "inputIuran" && cacheDataServer && cacheDataServer.iuran) {
-        cacheDataServer.iuran.push([
-          payload.tanggal,
-          payload.blok,
-          payload.noRumah,
-          payload.bulan,
-          payload.jumlah,
-          "-"
-        ]);
-      } else if (payload.action === "inputKas" && cacheDataServer && cacheDataServer.kas) {
-        cacheDataServer.kas.push([payload.tanggal, payload.keterangan, payload.jumlah]);
-      } else if (payload.action === "inputPengeluaran" && cacheDataServer && cacheDataServer.pengeluaran) {
-        cacheDataServer.pengeluaran.push([payload.tanggal, payload.keterangan, payload.jumlah]);
-      }
-
       setTanggalDefaultForm();
     })
     .catch(err => {
@@ -843,7 +852,7 @@
     tabel.style.display = "table";
 
     const prosesRenderTabel = (data) => {
-      const iuranRumah = data.iuran.filter(row => {
+      const iuranRumah = (data.iuran || []).filter(row => {
         return String(row[1]).toUpperCase() === blok && String(row[2]) === noRumah;
       });
 
@@ -925,6 +934,25 @@
   }
 
   function kirimDataHapus(payload) {
+    // 1. Langsung hapus dari cache lokal lebih dulu
+    if (cacheDataServer && cacheDataServer.iuran) {
+      cacheDataServer.iuran = cacheDataServer.iuran.filter(row => {
+        const isMatch = String(row[1]).toUpperCase() === payload.blok && 
+                        String(row[2]) === payload.noRumah && 
+                        String(row[3]).substring(0, 7) === payload.bulan;
+        return !isMatch;
+      });
+    }
+
+    // 2. Jika offline, simpan ke antrean
+    if (!navigator.onLine) {
+      simpanKeAntreanOffline(payload);
+      alert("Koneksi offline: Perintah hapus disimpan sementara.");
+      cekIuranWarga();
+      return;
+    }
+
+    // 3. Jika online, kirim ke Apps Script
     tampilkanLoading("Menghapus...");
     fetch(SCRIPT_URL, {
       method: "POST",
@@ -935,25 +963,16 @@
     .then(() => {
       sembunyikanLoading();
       alert("Data iuran berhasil dihapus!");
-
-      if (cacheDataServer && cacheDataServer.iuran) {
-        cacheDataServer.iuran = cacheDataServer.iuran.filter(row => {
-          const isMatch = String(row[1]).toUpperCase() === payload.blok && 
-                          String(row[2]) === payload.noRumah && 
-                          String(row[3]).substring(0, 7) === payload.bulan;
-          return !isMatch;
-        });
-      }
-
       cekIuranWarga();
     })
     .catch(err => {
       sembunyikanLoading();
-      alert("Gagal terhubung ke server saat menghapus data.");
+      simpanKeAntreanOffline(payload);
+      alert("Gagal terhubung ke server. Perintah hapus disimpan di antrean offline.");
+      cekIuranWarga();
     });
   }
 
-  // DENGAN DUKUNGAN REFRESH PAKSA (paksaRefresh = true)
   function muatLaporanKeuangan(paksaRefresh = false) {
     const filterBulan = document.getElementById("filterBulan").value;
     const filterKategori = document.getElementById("filterKategori").value;
@@ -965,7 +984,7 @@
       let totalMasuk = 0, totalKeluar = 0;
 
       if (filterKategori === "semua" || filterKategori === "Kas") {
-        data.kas.forEach(row => {
+        (data.kas || []).forEach(row => {
           if (String(row[0]).substring(0, 7) === filterBulan) {
             totalMasuk += Number(row[2]);
             tbody.innerHTML += `<tr><td>${formatTanggalIndo(row[0])}</td><td>Kas</td><td>${row[1]}</td><td>Rp ${Number(row[2]).toLocaleString()}</td></tr>`;
@@ -974,7 +993,7 @@
       }
 
       if (filterKategori === "semua" || filterKategori === "Iuran") {
-        data.iuran.forEach(row => {
+        (data.iuran || []).forEach(row => {
           if (String(row[0]).substring(0, 7) === filterBulan) {
             totalMasuk += Number(row[4]);
             const blnTeks = formatIuranBulan(String(row[3]));
@@ -984,7 +1003,7 @@
       }
 
       if (filterKategori === "semua" || filterKategori === "Keluar") {
-        data.pengeluaran.forEach(row => {
+        (data.pengeluaran || []).forEach(row => {
           if (String(row[0]).substring(0, 7) === filterBulan) {
             totalKeluar += Number(row[2]);
             tbody.innerHTML += `<tr><td>${formatTanggalIndo(row[0])}</td><td>Keluar</td><td>${row[1]}</td><td style="color:var(--danger);">-Rp ${Number(row[2]).toLocaleString()}</td></tr>`;
@@ -1010,6 +1029,11 @@
     if (cacheDataServer && !paksaRefresh) {
       renderLaporan(cacheDataServer);
     } else {
+      if (!navigator.onLine) {
+        alert("Refresh data dari Google Sheets memerlukan koneksi internet.");
+        renderLaporan(cacheDataServer);
+        return;
+      }
       tampilkanLoading("Mengunduh data laporan terbaru...");
       fetch(SCRIPT_URL)
         .then(res => res.json())
@@ -1025,7 +1049,9 @@
     }
   }
 
+  // Inisialisasi awal
   setTanggalDefaultForm();
+  muatDataServer();
   updateStatusKoneksi();
 
   if ('serviceWorker' in navigator) {
