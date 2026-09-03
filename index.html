@@ -245,7 +245,7 @@
     .badge-lunas { background-color: #dcfce7; color: var(--success); }
     .badge-belum { background-color: #fee2e2; color: var(--danger); }
 
-    /* LOADING OVERLAY */
+    /* LOADING OVERLAY - DIPERBAIKI (align-items: center) */
     #loadingOverlay {
       position: fixed;
       top: 0; left: 0; width: 100%; height: 100%;
@@ -407,7 +407,7 @@
             <th>Status</th>
             <th>Tgl Bayar</th>
             <th>Bukti</th>
-            <th>Aksi</th> <!-- PENAMBAHAN: KOLOM AKSI HAPUS -->
+            <th>Aksi</th>
           </tr>
         </thead>
         <tbody></tbody>
@@ -637,15 +637,16 @@
     updateStatusKoneksi();
   }
 
+  // FUNGSI KIRIM DATA OPTIMAL (TANPA DELAY SETTIMEOUT & RE-FETCH INSTAN)
   function kirimData(payload) {
     if (!navigator.onLine) {
       simpanKeAntreanOffline(payload);
-      alert("Koneksi offline: Data disimpan sementara di HP dan akan disinkronkan saat online.");
+      alert("Koneksi offline: Data disimpan sementara di HP.");
       setTanggalDefaultForm();
       return;
     }
 
-    tampilkanLoading("Menyimpan ke Google Sheets...");
+    tampilkanLoading("Menyimpan...");
     fetch(SCRIPT_URL, {
       method: "POST",
       mode: "no-cors",
@@ -653,12 +654,26 @@
       body: JSON.stringify(payload)
     })
     .then(() => {
-      setTimeout(() => {
-        sembunyikanLoading();
-        alert("Data berhasil diproses!");
-        setTanggalDefaultForm();
-        muatLaporanKeuangan();
-      }, 1500);
+      sembunyikanLoading();
+      alert("Data berhasil diproses!");
+
+      // Update cache lokal langsung tanpa perlu fetch ulang seluruh data dari server
+      if (payload.action === "inputIuran" && cacheDataServer && cacheDataServer.iuran) {
+        cacheDataServer.iuran.push([
+          payload.tanggal,
+          payload.blok,
+          payload.noRumah,
+          payload.bulan,
+          payload.jumlah,
+          "-"
+        ]);
+      } else if (payload.action === "inputKas" && cacheDataServer && cacheDataServer.kas) {
+        cacheDataServer.kas.push([payload.tanggal, payload.keterangan, payload.jumlah]);
+      } else if (payload.action === "inputPengeluaran" && cacheDataServer && cacheDataServer.pengeluaran) {
+        cacheDataServer.pengeluaran.push([payload.tanggal, payload.keterangan, payload.jumlah]);
+      }
+
+      setTanggalDefaultForm();
     })
     .catch(err => {
       sembunyikanLoading();
@@ -691,7 +706,7 @@
     sembunyikanLoading();
     updateStatusKoneksi();
     alert("Semua data offline berhasil tersinkron ke Google Sheets!");
-    muatLaporanKeuangan();
+    muatDataServer();
   }
 
   function konversiFileKeBase64(file) {
@@ -801,75 +816,81 @@
       return;
     }
 
-    tampilkanLoading("Mengecek data warga...");
+    const tabel = document.getElementById("tabelStatusWarga");
+    const tbody = tabel.querySelector("tbody");
+    tbody.innerHTML = "";
+    tabel.style.display = "table";
 
-    fetch(SCRIPT_URL)
-      .then(res => res.json())
-      .then(data => {
-        sembunyikanLoading();
-        cacheDataServer = data;
-        const tabel = document.getElementById("tabelStatusWarga");
-        const tbody = tabel.querySelector("tbody");
-        tbody.innerHTML = "";
-        tabel.style.display = "table";
+    // MENGGUNAKAN DATA CACHE LOKAL AGAR TAMPIL KETIKA DITEKAN TANPA WAIT DELAY
+    const prosesRenderTabel = (data) => {
+      const iuranRumah = data.iuran.filter(row => {
+        return String(row[1]).toUpperCase() === blok && String(row[2]) === noRumah;
+      });
 
-        const iuranRumah = data.iuran.filter(row => {
-          return String(row[1]).toUpperCase() === blok && String(row[2]) === noRumah;
+      for (let i = 1; i <= 12; i++) {
+        const bulanDuaDigit = String(i).padStart(2, '0');
+        const kodeBulanCari = `${tahun}-${bulanDuaDigit}`;
+
+        const transaksi = iuranRumah.find(row => {
+          const rawBulan = String(row[3]);
+          if (rawBulan.includes("T")) {
+            const d = new Date(rawBulan);
+            const y = d.getFullYear();
+            const m = String(d.getMonth() + 1).padStart(2, '0');
+            return `${y}-${m}` === kodeBulanCari;
+          }
+          return rawBulan.substring(0, 7) === kodeBulanCari;
         });
 
-        for (let i = 1; i <= 12; i++) {
-          const bulanDuaDigit = String(i).padStart(2, '0');
-          const kodeBulanCari = `${tahun}-${bulanDuaDigit}`;
+        if (transaksi) {
+          const urlBukti = transaksi[5];
+          let linkHtml = "-";
 
-          const transaksi = iuranRumah.find(row => {
-            const rawBulan = String(row[3]);
-            if (rawBulan.includes("T")) {
-              const d = new Date(rawBulan);
-              const y = d.getFullYear();
-              const m = String(d.getMonth() + 1).padStart(2, '0');
-              return `${y}-${m}` === kodeBulanCari;
-            }
-            return rawBulan.substring(0, 7) === kodeBulanCari;
-          });
-
-          if (transaksi) {
-            const urlBukti = transaksi[5];
-            let linkHtml = "-";
-
-            if (urlBukti && urlBukti !== "-" && urlBukti.startsWith("http")) {
-              linkHtml = `<a href="${urlBukti}" target="_blank" style="color: var(--primary); font-weight: 600; text-decoration: underline;">Lihat Bukti</a>`;
-            }
-
-            // PENAMBAHAN: TOMBOL HAPUS DENGAN KONFIRMASI
-            tbody.innerHTML += `
-              <tr>
-                <td>${namaBulan[i - 1]}</td>
-                <td><span class="badge badge-lunas">LUNAS</span></td>
-                <td>${formatTanggalIndo(transaksi[0])}</td>
-                <td>${linkHtml}</td>
-                <td>
-                  <button class="btn-delete" onclick="konfirmasiHapusIuran('${blok}', '${noRumah}', '${kodeBulanCari}', '${namaBulan[i - 1]} ${tahun}')">Hapus</button>
-                </td>
-              </tr>`;
-          } else {
-            tbody.innerHTML += `
-              <tr>
-                <td>${namaBulan[i - 1]}</td>
-                <td><span class="badge badge-belum">BELUM</span></td>
-                <td>-</td>
-                <td>-</td>
-                <td>-</td>
-              </tr>`;
+          if (urlBukti && urlBukti !== "-" && urlBukti.startsWith("http")) {
+            linkHtml = `<a href="${urlBukti}" target="_blank" style="color: var(--primary); font-weight: 600; text-decoration: underline;">Lihat Bukti</a>`;
           }
+
+          tbody.innerHTML += `
+            <tr>
+              <td>${namaBulan[i - 1]}</td>
+              <td><span class="badge badge-lunas">LUNAS</span></td>
+              <td>${formatTanggalIndo(transaksi[0])}</td>
+              <td>${linkHtml}</td>
+              <td>
+                <button class="btn-delete" onclick="konfirmasiHapusIuran('${blok}', '${noRumah}', '${kodeBulanCari}', '${namaBulan[i - 1]} ${tahun}')">Hapus</button>
+              </td>
+            </tr>`;
+        } else {
+          tbody.innerHTML += `
+            <tr>
+              <td>${namaBulan[i - 1]}</td>
+              <td><span class="badge badge-belum">BELUM</span></td>
+              <td>-</td>
+              <td>-</td>
+              <td>-</td>
+            </tr>`;
         }
-      })
-      .catch(err => {
-        sembunyikanLoading();
-        alert("Pencarian laporan membutuhkan koneksi internet.");
-      });
+      }
+    };
+
+    if (cacheDataServer) {
+      prosesRenderTabel(cacheDataServer);
+    } else {
+      tampilkanLoading("Mengecek data warga...");
+      fetch(SCRIPT_URL)
+        .then(res => res.json())
+        .then(data => {
+          sembunyikanLoading();
+          cacheDataServer = data;
+          prosesRenderTabel(cacheDataServer);
+        })
+        .catch(err => {
+          sembunyikanLoading();
+          alert("Pencarian laporan membutuhkan koneksi internet.");
+        });
+    }
   }
 
-  // PENAMBAHAN: FUNGSI KONFIRMASI SEBELUM MENGHAPUS IURAN
   function konfirmasiHapusIuran(blok, noRumah, bulanKode, namaBulanTahun) {
     const setuju = confirm(`Apakah Anda yakin ingin MENGHAPUS data iuran Blok ${blok} No ${noRumah} untuk bulan ${namaBulanTahun}?`);
     
@@ -883,8 +904,9 @@
     }
   }
 
+  // FUNGSI HAPUS DIPERCEPAT (TANPA DELAY SETTIMEOUT)
   function kirimDataHapus(payload) {
-    tampilkanLoading("Menghapus data iuran...");
+    tampilkanLoading("Menghapus...");
     fetch(SCRIPT_URL, {
       method: "POST",
       mode: "no-cors",
@@ -892,11 +914,20 @@
       body: JSON.stringify(payload)
     })
     .then(() => {
-      setTimeout(() => {
-        sembunyikanLoading();
-        alert("Data iuran berhasil dihapus!");
-        cekIuranWarga(); // Refresh tabel status warga
-      }, 1500);
+      sembunyikanLoading();
+      alert("Data iuran berhasil dihapus!");
+
+      // Langsung hapus dari cache lokal agar tampilan langsung hilang
+      if (cacheDataServer && cacheDataServer.iuran) {
+        cacheDataServer.iuran = cacheDataServer.iuran.filter(row => {
+          const isMatch = String(row[1]).toUpperCase() === payload.blok && 
+                          String(row[2]) === payload.noRumah && 
+                          String(row[3]).substring(0, 7) === payload.bulan;
+          return !isMatch;
+        });
+      }
+
+      cekIuranWarga(); // Refresh tampilan tabel instan
     })
     .catch(err => {
       sembunyikanLoading();
@@ -909,62 +940,69 @@
     const filterKategori = document.getElementById("filterKategori").value;
     if (!filterBulan) return;
 
-    tampilkanLoading("Memuat laporan...");
+    const renderLaporan = (data) => {
+      let tbody = document.querySelector("#tabelLaporan tbody");
+      tbody.innerHTML = "";
+      let totalMasuk = 0, totalKeluar = 0;
 
-    fetch(SCRIPT_URL)
-      .then(res => res.json())
-      .then(data => {
-        sembunyikanLoading();
-        cacheDataServer = data;
-        let tbody = document.querySelector("#tabelLaporan tbody");
-        tbody.innerHTML = "";
-        let totalMasuk = 0, totalKeluar = 0;
+      if (filterKategori === "semua" || filterKategori === "Kas") {
+        data.kas.forEach(row => {
+          if (String(row[0]).substring(0, 7) === filterBulan) {
+            totalMasuk += Number(row[2]);
+            tbody.innerHTML += `<tr><td>${formatTanggalIndo(row[0])}</td><td>Kas</td><td>${row[1]}</td><td>Rp ${Number(row[2]).toLocaleString()}</td></tr>`;
+          }
+        });
+      }
 
-        if (filterKategori === "semua" || filterKategori === "Kas") {
-          data.kas.forEach(row => {
-            if (String(row[0]).substring(0, 7) === filterBulan) {
-              totalMasuk += Number(row[2]);
-              tbody.innerHTML += `<tr><td>${formatTanggalIndo(row[0])}</td><td>Kas</td><td>${row[1]}</td><td>Rp ${Number(row[2]).toLocaleString()}</td></tr>`;
-            }
-          });
-        }
+      if (filterKategori === "semua" || filterKategori === "Iuran") {
+        data.iuran.forEach(row => {
+          if (String(row[0]).substring(0, 7) === filterBulan) {
+            totalMasuk += Number(row[4]);
+            const blnTeks = formatIuranBulan(String(row[3]));
+            tbody.innerHTML += `<tr><td>${formatTanggalIndo(row[0])}</td><td>Iuran</td><td>Blok ${row[1]} No ${row[2]} (${blnTeks})</td><td>Rp ${Number(row[4]).toLocaleString()}</td></tr>`;
+          }
+        });
+      }
 
-        if (filterKategori === "semua" || filterKategori === "Iuran") {
-          data.iuran.forEach(row => {
-            if (String(row[0]).substring(0, 7) === filterBulan) {
-              totalMasuk += Number(row[4]);
-              const blnTeks = formatIuranBulan(String(row[3]));
-              tbody.innerHTML += `<tr><td>${formatTanggalIndo(row[0])}</td><td>Iuran</td><td>Blok ${row[1]} No ${row[2]} (${blnTeks})</td><td>Rp ${Number(row[4]).toLocaleString()}</td></tr>`;
-            }
-          });
-        }
+      if (filterKategori === "semua" || filterKategori === "Keluar") {
+        data.pengeluaran.forEach(row => {
+          if (String(row[0]).substring(0, 7) === filterBulan) {
+            totalKeluar += Number(row[2]);
+            tbody.innerHTML += `<tr><td>${formatTanggalIndo(row[0])}</td><td>Keluar</td><td>${row[1]}</td><td style="color:var(--danger);">-Rp ${Number(row[2]).toLocaleString()}</td></tr>`;
+          }
+        });
+      }
 
-        if (filterKategori === "semua" || filterKategori === "Keluar") {
-          data.pengeluaran.forEach(row => {
-            if (String(row[0]).substring(0, 7) === filterBulan) {
-              totalKeluar += Number(row[2]);
-              tbody.innerHTML += `<tr><td>${formatTanggalIndo(row[0])}</td><td>Keluar</td><td>${row[1]}</td><td style="color:var(--danger);">-Rp ${Number(row[2]).toLocaleString()}</td></tr>`;
-            }
-          });
-        }
+      if (filterKategori === "Kas" || filterKategori === "Iuran") {
+        document.getElementById("totMasuk").innerText = `Rp ${totalMasuk.toLocaleString()}`;
+        document.getElementById("totKeluar").innerText = `Rp 0`;
+        document.getElementById("saldo").innerText = `Rp ${totalMasuk.toLocaleString()}`;
+      } else if (filterKategori === "Keluar") {
+        document.getElementById("totMasuk").innerText = `Rp 0`;
+        document.getElementById("totKeluar").innerText = `Rp ${totalKeluar.toLocaleString()}`;
+        document.getElementById("saldo").innerText = `-Rp ${totalKeluar.toLocaleString()}`;
+      } else {
+        document.getElementById("totMasuk").innerText = `Rp ${totalMasuk.toLocaleString()}`;
+        document.getElementById("totKeluar").innerText = `Rp ${totalKeluar.toLocaleString()}`;
+        document.getElementById("saldo").innerText = `Rp ${(totalMasuk - totalKeluar).toLocaleString()}`;
+      }
+    };
 
-        if (filterKategori === "Kas" || filterKategori === "Iuran") {
-          document.getElementById("totMasuk").innerText = `Rp ${totalMasuk.toLocaleString()}`;
-          document.getElementById("totKeluar").innerText = `Rp 0`;
-          document.getElementById("saldo").innerText = `Rp ${totalMasuk.toLocaleString()}`;
-        } else if (filterKategori === "Keluar") {
-          document.getElementById("totMasuk").innerText = `Rp 0`;
-          document.getElementById("totKeluar").innerText = `Rp ${totalKeluar.toLocaleString()}`;
-          document.getElementById("saldo").innerText = `-Rp ${totalKeluar.toLocaleString()}`;
-        } else {
-          document.getElementById("totMasuk").innerText = `Rp ${totalMasuk.toLocaleString()}`;
-          document.getElementById("totKeluar").innerText = `Rp ${totalKeluar.toLocaleString()}`;
-          document.getElementById("saldo").innerText = `Rp ${(totalMasuk - totalKeluar).toLocaleString()}`;
-        }
-      })
-      .catch(err => {
-        sembunyikanLoading();
-      });
+    if (cacheDataServer) {
+      renderLaporan(cacheDataServer);
+    } else {
+      tampilkanLoading("Memuat laporan...");
+      fetch(SCRIPT_URL)
+        .then(res => res.json())
+        .then(data => {
+          sembunyikanLoading();
+          cacheDataServer = data;
+          renderLaporan(cacheDataServer);
+        })
+        .catch(err => {
+          sembunyikanLoading();
+        });
+    }
   }
 
   setTanggalDefaultForm();
