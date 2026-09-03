@@ -213,6 +213,23 @@
       margin-top: 8px; 
     }
 
+    /* TOMBOL HAPUS AKSI */
+    .btn-delete {
+      background-color: #fee2e2;
+      color: var(--danger);
+      border: 1px solid #fca5a5;
+      padding: 4px 8px;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-delete:hover {
+      background-color: var(--danger);
+      color: white;
+    }
+
     /* LAPORAN & RINGKASAN */
     .summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 20px; }
     .summary-card { background: #f8fafc; padding: 12px; border-radius: 10px; border: 1px solid var(--border-color); text-align: center; }
@@ -220,7 +237,7 @@
     .summary-card .amount { font-weight: 700; font-size: 0.95rem; }
     
     .table-container { overflow-x: auto; margin-top: 10px; border: 1px solid var(--border-color); border-radius: 10px; }
-    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; min-width: 450px; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; min-width: 500px; }
     th { background-color: #f1f5f9; color: var(--text-muted); font-weight: 600; text-transform: uppercase; font-size: 0.75rem; }
     th, td { padding: 12px 14px; text-align: left; border-bottom: 1px solid var(--border-color); }
     
@@ -390,6 +407,7 @@
             <th>Status</th>
             <th>Tgl Bayar</th>
             <th>Bukti</th>
+            <th>Aksi</th> <!-- PENAMBAHAN: KOLOM AKSI HAPUS -->
           </tr>
         </thead>
         <tbody></tbody>
@@ -404,7 +422,6 @@
         <label>Pilih Bulan</label>
         <input type="month" id="filterBulan" onchange="muatLaporanKeuangan()">
       </div>
-      <!-- PENAMBAHAN: FILTER KATEGORI PADA LAPORAN -->
       <div class="form-group">
         <label>Kategori</label>
         <select id="filterKategori" onchange="muatLaporanKeuangan()">
@@ -638,7 +655,7 @@
     .then(() => {
       setTimeout(() => {
         sembunyikanLoading();
-        alert("Data berhasil disimpan!");
+        alert("Data berhasil diproses!");
         setTanggalDefaultForm();
         muatLaporanKeuangan();
       }, 1500);
@@ -823,18 +840,23 @@
               linkHtml = `<a href="${urlBukti}" target="_blank" style="color: var(--primary); font-weight: 600; text-decoration: underline;">Lihat Bukti</a>`;
             }
 
+            // PENAMBAHAN: TOMBOL HAPUS DENGAN KONFIRMASI
             tbody.innerHTML += `
               <tr>
                 <td>${namaBulan[i - 1]}</td>
                 <td><span class="badge badge-lunas">LUNAS</span></td>
                 <td>${formatTanggalIndo(transaksi[0])}</td>
                 <td>${linkHtml}</td>
+                <td>
+                  <button class="btn-delete" onclick="konfirmasiHapusIuran('${blok}', '${noRumah}', '${kodeBulanCari}', '${namaBulan[i - 1]} ${tahun}')">Hapus</button>
+                </td>
               </tr>`;
           } else {
             tbody.innerHTML += `
               <tr>
                 <td>${namaBulan[i - 1]}</td>
                 <td><span class="badge badge-belum">BELUM</span></td>
+                <td>-</td>
                 <td>-</td>
                 <td>-</td>
               </tr>`;
@@ -847,7 +869,41 @@
       });
   }
 
-  // PENAMBAHAN: FUNGSI MUAT LAPORAN KEUANGAN DENGAN FILTER KATEGORI
+  // PENAMBAHAN: FUNGSI KONFIRMASI SEBELUM MENGHAPUS IURAN
+  function konfirmasiHapusIuran(blok, noRumah, bulanKode, namaBulanTahun) {
+    const setuju = confirm(`Apakah Anda yakin ingin MENGHAPUS data iuran Blok ${blok} No ${noRumah} untuk bulan ${namaBulanTahun}?`);
+    
+    if (setuju) {
+      kirimDataHapus({
+        action: "deleteIuran",
+        blok: blok,
+        noRumah: noRumah,
+        bulan: bulanKode
+      });
+    }
+  }
+
+  function kirimDataHapus(payload) {
+    tampilkanLoading("Menghapus data iuran...");
+    fetch(SCRIPT_URL, {
+      method: "POST",
+      mode: "no-cors",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    })
+    .then(() => {
+      setTimeout(() => {
+        sembunyikanLoading();
+        alert("Data iuran berhasil dihapus!");
+        cekIuranWarga(); // Refresh tabel status warga
+      }, 1500);
+    })
+    .catch(err => {
+      sembunyikanLoading();
+      alert("Gagal terhubung ke server saat menghapus data.");
+    });
+  }
+
   function muatLaporanKeuangan() {
     const filterBulan = document.getElementById("filterBulan").value;
     const filterKategori = document.getElementById("filterKategori").value;
@@ -864,7 +920,6 @@
         tbody.innerHTML = "";
         let totalMasuk = 0, totalKeluar = 0;
 
-        // 1. Kas Masuk
         if (filterKategori === "semua" || filterKategori === "Kas") {
           data.kas.forEach(row => {
             if (String(row[0]).substring(0, 7) === filterBulan) {
@@ -874,7 +929,6 @@
           });
         }
 
-        // 2. Iuran Warga
         if (filterKategori === "semua" || filterKategori === "Iuran") {
           data.iuran.forEach(row => {
             if (String(row[0]).substring(0, 7) === filterBulan) {
@@ -885,7 +939,6 @@
           });
         }
 
-        // 3. Pengeluaran
         if (filterKategori === "semua" || filterKategori === "Keluar") {
           data.pengeluaran.forEach(row => {
             if (String(row[0]).substring(0, 7) === filterBulan) {
@@ -895,7 +948,6 @@
           });
         }
 
-        // Hitung nominal jika disaring per kategori khusus
         if (filterKategori === "Kas" || filterKategori === "Iuran") {
           document.getElementById("totMasuk").innerText = `Rp ${totalMasuk.toLocaleString()}`;
           document.getElementById("totKeluar").innerText = `Rp 0`;
