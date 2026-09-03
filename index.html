@@ -176,7 +176,7 @@
       appearance: none;
     }
 
-    input[type="date"], input[type="month"] {
+    input[type="date"], input[type="month"], select {
       min-height: 42px;
       background-color: #ffffff;
     }
@@ -187,7 +187,7 @@
       cursor: pointer;
     }
 
-    input:focus { outline: none; border-color: var(--primary); background-color: #fff; }
+    input:focus, select:focus { outline: none; border-color: var(--primary); background-color: #fff; }
     
     .form-group-row { 
       display: flex; 
@@ -233,7 +233,7 @@
       position: fixed;
       top: 0; left: 0; width: 100%; height: 100%;
       background: rgba(15, 23, 42, 0.45); backdrop-filter: blur(4px);
-      display: none; flex-direction: column; justify-content: center; align-items: center;
+      display: none; flex-direction: column; justify-content: center; align-align: center;
       z-index: 9999; color: white; font-weight: 600;
     }
     .spinner {
@@ -302,22 +302,32 @@
       <div class="form-group-row">
         <div class="form-group">
           <label>Blok</label>
-          <input type="text" id="blok" placeholder="F1" required>
+          <input type="text" id="blok" placeholder="F1" required oninput="perbaruiDropdownBulanFilter()">
         </div>
         <div class="form-group">
           <label>No. Rumah</label>
-          <input type="number" id="noRumah" placeholder="1" required>
+          <input type="number" id="noRumah" placeholder="1" required oninput="perbaruiDropdownBulanFilter()">
         </div>
       </div>
-      <div class="form-group">
-        <label>Iuran Bulan & Tahun</label>
-        <input type="month" id="blnIuran" required>
+
+      <!-- PERUBAHAN: INPUT BULAN DAN TAHUN DIPISAH -->
+      <div class="form-group-row">
+        <div class="form-group">
+          <label>Pilih Bulan</label>
+          <select id="blnIuran" required>
+            <option value="">-- Isikan Blok & No Rumah Dahulu --</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Pilih Tahun</label>
+          <input type="number" id="thnIuran" placeholder="2026" required onchange="perbaruiDropdownBulanFilter()" oninput="perbaruiDropdownBulanFilter()">
+        </div>
       </div>
+
       <div class="form-group">
         <label>Jumlah Nominal (Rp)</label>
         <input type="number" id="jmlIuran" value="50000" placeholder="50000" required>
       </div>
-      <!-- PERUBAHAN: INPUT FILE BUKTI TRANSAKSI (OPSIONAL) -->
       <div class="form-group">
         <label>Upload Bukti Transfer / Resi (Opsional)</label>
         <input type="file" id="buktiIuran" accept="image/*,.pdf">
@@ -380,7 +390,7 @@
             <th>Bulan</th>
             <th>Status</th>
             <th>Tgl Bayar</th>
-            <th>Bukti</th> <!-- PERUBAHAN: KOLOM BUKTI DITAMBAHKAN -->
+            <th>Bukti</th>
           </tr>
         </thead>
         <tbody></tbody>
@@ -412,6 +422,8 @@
 <script>
   const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzoNNBnyomIo7IhjVUpefIUkhBpqpWeJxIR6O7AbBxtemH1iOCZ8lHOLOg9Nbj0t2nK/exec";
   const namaBulan = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+  
+  let cacheDataServer = null;
 
   function dapatkanTanggalHariIni() {
     const today = new Date();
@@ -431,14 +443,18 @@
   function setTanggalDefaultForm() {
     const hariIni = dapatkanTanggalHariIni();
     const bulanIni = dapatkanBulanHariIni();
+    const tahunIni = new Date().getFullYear();
     
     document.getElementById("tglIuran").value = hariIni;
     document.getElementById("tglKas").value = hariIni;
     document.getElementById("tglPengeluaran").value = hariIni;
     
-    document.getElementById("blnIuran").value = bulanIni;
+    // DEFAULT TAHUN IURAN & CEK TAHUN KE TAHUN SEKARANG
+    document.getElementById("thnIuran").value = tahunIni;
+    document.getElementById("cekTahun").value = tahunIni;
     document.getElementById("filterBulan").value = bulanIni;
-    document.getElementById("cekTahun").value = new Date().getFullYear();
+    
+    muatDataServer();
   }
 
   function toggleSidebar() {
@@ -489,6 +505,76 @@
       if (indexBulan >= 0 && indexBulan < 12) return `${namaBulan[indexBulan]} ${parts[0]}`;
     }
     return bulanString;
+  }
+
+  async function muatDataServer() {
+    if (!navigator.onLine) return;
+    try {
+      const res = await fetch(SCRIPT_URL);
+      cacheDataServer = await res.json();
+      perbaruiDropdownBulanFilter();
+    } catch (e) {
+      console.error("Gagal memperbarui cache data server", e);
+    }
+  }
+
+  // MENYARING DAN MENAMPILKAN HANYA BULAN YG BELUM DIBAYAR UNTUK TAHUN YANG DIPILIH
+  function perbaruiDropdownBulanFilter() {
+    const blok = document.getElementById("blok").value.trim().toUpperCase();
+    const noRumah = document.getElementById("noRumah").value.trim();
+    const tahunPilihan = document.getElementById("thnIuran").value.trim();
+    const selectBulan = document.getElementById("blnIuran");
+
+    selectBulan.innerHTML = "";
+
+    if (!blok || !noRumah || !tahunPilihan) {
+      selectBulan.innerHTML = `<option value="">-- Isikan Blok, No Rumah & Tahun --</option>`;
+      return;
+    }
+
+    let bulanTerbayarSet = new Set();
+
+    if (cacheDataServer && cacheDataServer.iuran) {
+      cacheDataServer.iuran.forEach(row => {
+        if (String(row[1]).toUpperCase() === blok && String(row[2]) === noRumah) {
+          let rawBulan = String(row[3]);
+          if (rawBulan.includes("T")) {
+            const d = new Date(rawBulan);
+            const y = d.getFullYear();
+            const m = String(d.getMonth() + 1).padStart(2, '0');
+            rawBulan = `${y}-${m}`;
+          } else {
+            rawBulan = rawBulan.substring(0, 7);
+          }
+          bulanTerbayarSet.add(rawBulan);
+        }
+      });
+    }
+
+    let opsiDibuat = 0;
+    const bulanSekarangIndex = new Date().getMonth() + 1; // 1-12
+
+    for (let m = 1; m <= 12; m++) {
+      const duaDigitM = String(m).padStart(2, '0');
+      const kodeBulan = `${tahunPilihan}-${duaDigitM}`;
+      
+      // HANYA TAMPILKAN BULAN YANG BELUM DIBAYAR
+      if (!bulanTerbayarSet.has(kodeBulan)) {
+        const opt = document.createElement("option");
+        opt.value = duaDigitM; // Menyimpan hanya format dua digit bulan (misal: "01", "02")
+        opt.innerText = namaBulan[m - 1];
+        
+        // Pilih otomatis bulan berjalan jika belum dibayar
+        if (m === bulanSekarangIndex) opt.selected = true;
+        
+        selectBulan.appendChild(opt);
+        opsiDibuat++;
+      }
+    }
+
+    if (opsiDibuat === 0) {
+      selectBulan.innerHTML = `<option value="">-- Semua Bulan di Tahun ${tahunPilihan} Sudah Lunas --</option>`;
+    }
   }
 
   function updateStatusKoneksi() {
@@ -579,7 +665,6 @@
     muatLaporanKeuangan();
   }
 
-  // PERUBAHAN: HELPER UNTUK MENGUBAH FILE KE BASE64
   function konversiFileKeBase64(file) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -604,10 +689,45 @@
     e.target.reset();
   };
 
-  // PERUBAHAN: DUKUNGAN UPLOAD BUKTI PADA FORM IURAN
+  // KETIKA SIMPAN IURAN, FORMAT BULAN & TAHUN DIGABUNG DUA-DUANYA MENJADI "YYYY-MM" SBLM DIKIRIM KE SHEET
   document.getElementById("formIuran").onsubmit = async (e) => {
     e.preventDefault();
     
+    const blok = document.getElementById("blok").value.trim().toUpperCase();
+    const noRumah = document.getElementById("noRumah").value.trim();
+    const bulanDuaDigit = document.getElementById("blnIuran").value;
+    const tahunInput = document.getElementById("thnIuran").value.trim();
+
+    if (!bulanDuaDigit || !tahunInput) {
+      alert("Pilih bulan dan tahun iuran yang valid.");
+      return;
+    }
+
+    // Gabungkan menjadi format "YYYY-MM"
+    const kodeBulanLengkap = `${tahunInput}-${bulanDuaDigit}`;
+
+    // Validasi ulang ganda
+    if (cacheDataServer && cacheDataServer.iuran) {
+      const sudahLunas = cacheDataServer.iuran.some(row => {
+        const isSamaRumah = String(row[1]).toUpperCase() === blok && String(row[2]) === noRumah;
+        let rawBulan = String(row[3]);
+        if (rawBulan.includes("T")) {
+          const d = new Date(rawBulan);
+          const y = d.getFullYear();
+          const m = String(d.getMonth() + 1).padStart(2, '0');
+          rawBulan = `${y}-${m}`;
+        } else {
+          rawBulan = rawBulan.substring(0, 7);
+        }
+        return isSamaRumah && rawBulan === kodeBulanLengkap;
+      });
+
+      if (sudahLunas) {
+        alert(`Gagal Menyimpan: Blok ${blok} No ${noRumah} sudah LUNAS untuk iuran ${formatIuranBulan(kodeBulanLengkap)}.`);
+        return;
+      }
+    }
+
     const fileInput = document.getElementById("buktiIuran");
     let fileData = null;
 
@@ -623,9 +743,9 @@
     kirimData({
       action: "inputIuran",
       tanggal: document.getElementById("tglIuran").value,
-      blok: document.getElementById("blok").value.trim().toUpperCase(),
-      noRumah: document.getElementById("noRumah").value.trim(),
-      bulan: document.getElementById("blnIuran").value,
+      blok: blok,
+      noRumah: noRumah,
+      bulan: kodeBulanLengkap, // Tetap dikirim sebagai "YYYY-MM" agar format Google Sheets tidak berubah
       jumlah: Number(document.getElementById("jmlIuran").value),
       bukti: fileData
     });
@@ -645,7 +765,6 @@
     e.target.reset();
   };
 
-  // PERUBAHAN: TAMPILKAN LINK BUKTI PADA TABEL CEK WARGA
   function cekIuranWarga() {
     const blok = document.getElementById("cekBlok").value.trim().toUpperCase();
     const noRumah = document.getElementById("cekNoRumah").value.trim();
@@ -662,6 +781,7 @@
       .then(res => res.json())
       .then(data => {
         sembunyikanLoading();
+        cacheDataServer = data;
         const tabel = document.getElementById("tabelStatusWarga");
         const tbody = tabel.querySelector("tbody");
         tbody.innerHTML = "";
@@ -687,7 +807,7 @@
           });
 
           if (transaksi) {
-            const urlBukti = transaksi[5]; // Ambil URL dari kolom ke-6
+            const urlBukti = transaksi[5];
             let linkHtml = "-";
 
             if (urlBukti && urlBukti !== "-" && urlBukti.startsWith("http")) {
@@ -728,6 +848,7 @@
       .then(res => res.json())
       .then(data => {
         sembunyikanLoading();
+        cacheDataServer = data;
         let tbody = document.querySelector("#tabelLaporan tbody");
         tbody.innerHTML = "";
         let totalMasuk = 0, totalKeluar = 0;
