@@ -152,7 +152,7 @@
       to { opacity: 1; transform: translateY(0); }
     }
 
-    /* FORM STYLING - PERBAIKAN LEBAR INPUT MOBILES */
+    /* FORM STYLING */
     .form-group { 
       display: flex; 
       flex-direction: column; 
@@ -179,6 +179,12 @@
     input[type="date"], input[type="month"] {
       min-height: 42px;
       background-color: #ffffff;
+    }
+
+    input[type="file"] {
+      background-color: #ffffff;
+      padding: 8px;
+      cursor: pointer;
     }
 
     input:focus { outline: none; border-color: var(--primary); background-color: #fff; }
@@ -311,6 +317,11 @@
         <label>Jumlah Nominal (Rp)</label>
         <input type="number" id="jmlIuran" value="50000" placeholder="50000" required>
       </div>
+      <!-- PERUBAHAN: INPUT FILE BUKTI TRANSAKSI (OPSIONAL) -->
+      <div class="form-group">
+        <label>Upload Bukti Transfer / Resi (Opsional)</label>
+        <input type="file" id="buktiIuran" accept="image/*,.pdf">
+      </div>
       <button type="submit" class="btn-submit">Simpan Iuran</button>
     </form>
   </div>
@@ -364,7 +375,14 @@
 
     <div class="table-container" style="margin-top: 16px;">
       <table id="tabelStatusWarga" style="display:none;">
-        <thead><tr><th>Bulan</th><th>Status</th><th>Tgl Bayar</th></tr></thead>
+        <thead>
+          <tr>
+            <th>Bulan</th>
+            <th>Status</th>
+            <th>Tgl Bayar</th>
+            <th>Bukti</th> <!-- PERUBAHAN: KOLOM BUKTI DITAMBAHKAN -->
+          </tr>
+        </thead>
         <tbody></tbody>
       </table>
     </div>
@@ -561,6 +579,20 @@
     muatLaporanKeuangan();
   }
 
+  // PERUBAHAN: HELPER UNTUK MENGUBAH FILE KE BASE64
+  function konversiFileKeBase64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve({
+        namaFile: file.name,
+        tipeFile: file.type,
+        base64: reader.result.split(',')[1]
+      });
+      reader.onerror = error => reject(error);
+      reader.readAsDataURL(file);
+    });
+  }
+
   document.getElementById("formKas").onsubmit = (e) => {
     e.preventDefault();
     kirimData({
@@ -572,16 +604,32 @@
     e.target.reset();
   };
 
-  document.getElementById("formIuran").onsubmit = (e) => {
+  // PERUBAHAN: DUKUNGAN UPLOAD BUKTI PADA FORM IURAN
+  document.getElementById("formIuran").onsubmit = async (e) => {
     e.preventDefault();
+    
+    const fileInput = document.getElementById("buktiIuran");
+    let fileData = null;
+
+    if (fileInput.files.length > 0) {
+      try {
+        fileData = await konversiFileKeBase64(fileInput.files[0]);
+      } catch (err) {
+        alert("Gagal membaca file bukti transfer.");
+        return;
+      }
+    }
+
     kirimData({
       action: "inputIuran",
       tanggal: document.getElementById("tglIuran").value,
       blok: document.getElementById("blok").value.trim().toUpperCase(),
       noRumah: document.getElementById("noRumah").value.trim(),
       bulan: document.getElementById("blnIuran").value,
-      jumlah: Number(document.getElementById("jmlIuran").value)
+      jumlah: Number(document.getElementById("jmlIuran").value),
+      bukti: fileData
     });
+
     e.target.reset();
     document.getElementById("jmlIuran").value = "50000";
   };
@@ -597,47 +645,7 @@
     e.target.reset();
   };
 
-  // function cekIuranWarga() {
-  //   const blok = document.getElementById("cekBlok").value.trim().toUpperCase();
-  //   const noRumah = document.getElementById("cekNoRumah").value.trim();
-  //   const tahun = document.getElementById("cekTahun").value.trim();
-
-  //   if (!blok || !noRumah || !tahun) {
-  //     alert("Lengkapi Blok, No. Rumah, dan Tahun.");
-  //     return;
-  //   }
-
-  //   tampilkanLoading("Mengecek data warga...");
-
-  //   fetch(SCRIPT_URL)
-  //     .then(res => res.json())
-  //     .then(data => {
-  //       sembunyikanLoading();
-  //       const tabel = document.getElementById("tabelStatusWarga");
-  //       const tbody = tabel.querySelector("tbody");
-  //       tbody.innerHTML = "";
-  //       tabel.style.display = "table";
-
-  //       const iuranRumah = data.iuran.filter(row => {
-  //         return String(row[1]).toUpperCase() === blok && String(row[2]) === noRumah && String(row[3]).substring(0, 4) === tahun;
-  //       });
-
-  //       for (let i = 1; i <= 12; i++) {
-  //         const bulanFormat = `${tahun}-${String(i).padStart(2, '0')}`;
-  //         const transaksi = iuranRumah.find(row => String(row[3]).substring(0, 7) === bulanFormat);
-
-  //         if (transaksi) {
-  //           tbody.innerHTML += `<tr><td>${namaBulan[i - 1]}</td><td><span class="badge badge-lunas">LUNAS</span></td><td>${formatTanggalIndo(transaksi[0])}</td></tr>`;
-  //         } else {
-  //           tbody.innerHTML += `<tr><td>${namaBulan[i - 1]}</td><td><span class="badge badge-belum">BELUM</span></td><td>-</td></tr>`;
-  //         }
-  //       }
-  //     })
-  //     .catch(err => {
-  //       sembunyikanLoading();
-  //       alert("Pencarian laporan membutuhkan koneksi internet.");
-  //     });
-  // }
+  // PERUBAHAN: TAMPILKAN LINK BUKTI PADA TABEL CEK WARGA
   function cekIuranWarga() {
     const blok = document.getElementById("cekBlok").value.trim().toUpperCase();
     const noRumah = document.getElementById("cekNoRumah").value.trim();
@@ -667,10 +675,8 @@
           const bulanDuaDigit = String(i).padStart(2, '0');
           const kodeBulanCari = `${tahun}-${bulanDuaDigit}`;
 
-          // Mencari data yang cocok berdasarkan string YYYY-MM agar aman dari timezone
           const transaksi = iuranRumah.find(row => {
             const rawBulan = String(row[3]);
-            // Menangani format jika terlanjur berformat ISO UTC dari Google Sheets
             if (rawBulan.includes("T")) {
               const d = new Date(rawBulan);
               const y = d.getFullYear();
@@ -681,9 +687,28 @@
           });
 
           if (transaksi) {
-            tbody.innerHTML += `<tr><td>${namaBulan[i - 1]}</td><td><span class="badge badge-lunas">LUNAS</span></td><td>${formatTanggalIndo(transaksi[0])}</td></tr>`;
+            const urlBukti = transaksi[5]; // Ambil URL dari kolom ke-6
+            let linkHtml = "-";
+
+            if (urlBukti && urlBukti !== "-" && urlBukti.startsWith("http")) {
+              linkHtml = `<a href="${urlBukti}" target="_blank" style="color: var(--primary); font-weight: 600; text-decoration: underline;">Lihat Bukti</a>`;
+            }
+
+            tbody.innerHTML += `
+              <tr>
+                <td>${namaBulan[i - 1]}</td>
+                <td><span class="badge badge-lunas">LUNAS</span></td>
+                <td>${formatTanggalIndo(transaksi[0])}</td>
+                <td>${linkHtml}</td>
+              </tr>`;
           } else {
-            tbody.innerHTML += `<tr><td>${namaBulan[i - 1]}</td><td><span class="badge badge-belum">BELUM</span></td><td>-</td></tr>`;
+            tbody.innerHTML += `
+              <tr>
+                <td>${namaBulan[i - 1]}</td>
+                <td><span class="badge badge-belum">BELUM</span></td>
+                <td>-</td>
+                <td>-</td>
+              </tr>`;
           }
         }
       })
