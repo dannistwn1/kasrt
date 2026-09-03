@@ -210,7 +210,31 @@
       font-size: 0.95rem;
       font-weight: 600; 
       cursor: pointer; 
-      margin-top: 8px; 
+      margin-top: 8px;
+    }
+
+    /* HEADER FORM KANAN ATAS UNTUK TOMBOL RESET */
+    .form-header-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+
+    button.btn-reset-top {
+      background: transparent;
+      color: var(--danger);
+      border: 1px solid #fca5a5;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    button.btn-reset-top:hover {
+      background-color: var(--danger);
+      color: white;
     }
 
     /* TOMBOL HAPUS AKSI */
@@ -332,9 +356,14 @@
   <div id="tabIuran" class="tab-content active">
     <form id="formIuran">
       <div class="form-group">
-        <label>Tanggal Transaksi</label>
+        <!-- BARIS LABEL + TOMBOL RESET DI KANAN ATAS -->
+        <div class="form-header-row">
+          <label style="margin-bottom: 0;">Tanggal Transaksi</label>
+          <button type="button" class="btn-reset-top" onclick="resetFormIuran()">↺ Reset Form</button>
+        </div>
         <input type="date" id="tglIuran" required>
       </div>
+      
       <div class="form-group-row">
         <div class="form-group">
           <label>Blok</label>
@@ -367,6 +396,7 @@
         <label>Upload Bukti Transfer / Resi (Opsional)</label>
         <input type="file" id="buktiIuran" accept="image/*,.pdf">
       </div>
+      
       <button type="submit" class="btn-submit">Simpan Iuran</button>
     </form>
   </div>
@@ -473,7 +503,6 @@
   const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzoNNBnyomIo7IhjVUpefIUkhBpqpWeJxIR6O7AbBxtemH1iOCZ8lHOLOg9Nbj0t2nK/exec";
   const namaBulan = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
   
-  // Inisialisasi struktur cache lokal default agar tidak crash saat offline
   let cacheDataServer = { kas: [], iuran: [], pengeluaran: [] };
 
   function dapatkanTanggalHariIni() {
@@ -505,6 +534,12 @@
     document.getElementById("filterBulan").value = bulanIni;
     
     perbaruiDropdownBulanFilter();
+  }
+
+  function resetFormIuran() {
+    document.getElementById("formIuran").reset();
+    document.getElementById("jmlIuran").value = "50000";
+    setTanggalDefaultForm();
   }
 
   function toggleSidebar() {
@@ -663,9 +698,7 @@
     updateStatusKoneksi();
   }
 
-  // DI-UPDATE: MENDUKUNG PEMBARUAN CACHE LOKAL BAIK ONLINE MAUPUN OFFLINE
   function kirimData(payload) {
-    // 1. Perbarui cache lokal lebih dahulu agar dropdown bulan dan laporan selalu up to date
     if (payload.action === "inputIuran") {
       if (!cacheDataServer.iuran) cacheDataServer.iuran = [];
       cacheDataServer.iuran.push([
@@ -684,15 +717,13 @@
       cacheDataServer.pengeluaran.push([payload.tanggal, payload.keterangan, payload.jumlah]);
     }
 
-    // 2. Jika offline, simpan ke antrean lalu reset form
     if (!navigator.onLine) {
       simpanKeAntreanOffline(payload);
       alert("Koneksi offline: Data disimpan sementara di HP.");
-      setTanggalDefaultForm();
+      resetFormIuran();
       return;
     }
 
-    // 3. Jika online, kirim ke Apps Script
     tampilkanLoading("Menyimpan...");
     fetch(SCRIPT_URL, {
       method: "POST",
@@ -703,13 +734,13 @@
     .then(() => {
       sembunyikanLoading();
       alert("Data berhasil diproses!");
-      setTanggalDefaultForm();
+      resetFormIuran();
     })
     .catch(err => {
       sembunyikanLoading();
       simpanKeAntreanOffline(payload);
       alert("Gagal terhubung ke server. Data disimpan di antrean offline.");
-      setTanggalDefaultForm();
+      resetFormIuran();
     });
   }
 
@@ -820,9 +851,6 @@
       jumlah: Number(document.getElementById("jmlIuran").value),
       bukti: fileData
     });
-
-    e.target.reset();
-    document.getElementById("jmlIuran").value = "50000";
   };
 
   document.getElementById("formPengeluaran").onsubmit = (e) => {
@@ -934,7 +962,6 @@
   }
 
   function kirimDataHapus(payload) {
-    // 1. Langsung hapus dari cache lokal lebih dulu
     if (cacheDataServer && cacheDataServer.iuran) {
       cacheDataServer.iuran = cacheDataServer.iuran.filter(row => {
         const isMatch = String(row[1]).toUpperCase() === payload.blok && 
@@ -944,7 +971,6 @@
       });
     }
 
-    // 2. Jika offline, simpan ke antrean
     if (!navigator.onLine) {
       simpanKeAntreanOffline(payload);
       alert("Koneksi offline: Perintah hapus disimpan sementara.");
@@ -952,7 +978,6 @@
       return;
     }
 
-    // 3. Jika online, kirim ke Apps Script
     tampilkanLoading("Menghapus...");
     fetch(SCRIPT_URL, {
       method: "POST",
