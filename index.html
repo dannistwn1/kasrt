@@ -503,36 +503,26 @@
   
   let cacheDataServer = { kas: [], iuran: [], pengeluaran: [] };
 
-  // FUNGSI MEMBUAT/AMBIL DEVICE ID UNIK DARI HP
-  function dapatkanDeviceId() {
-    let deviceId = localStorage.getItem("rt_device_id");
-    if (!deviceId) {
-      deviceId = "DEV-" + Math.floor(1000 + Math.random() * 9000);
-      localStorage.setItem("rt_device_id", deviceId);
+  // 100% OTOMATIS: GENERATE FINGERPRINT PERANGKAT UNIK
+  function ambilIdentifikasiPerangkatOtomatis() {
+    // 1. Dapatkan UUID Unik yang terkunci di memori HP ini
+    let deviceKey = localStorage.getItem("rt_device_uuid");
+    if (!deviceKey) {
+      deviceKey = "ID-" + Math.floor(100000 + Math.random() * 900000);
+      localStorage.setItem("rt_device_uuid", deviceKey);
     }
-    return deviceId;
-  }
 
-  // FUNGSI DETEKSI SISTEM OPERASI & BROWSER SECARA OTOMATIS
-  function ambilIdentitasPerangkatOtomatis() {
+    // 2. Deteksi Platform OS
     const ua = navigator.userAgent;
-    let os = "Desktop/Lainnya";
-    
+    let os = "Desktop";
     if (/Android/i.test(ua)) os = "Android";
     else if (/iPhone|iPad|iPod/i.test(ua)) os = "iOS";
-    else if (/Windows/i.test(ua)) os = "Windows";
-    else if (/Macintosh/i.test(ua)) os = "MacOS";
 
-    let browser = "Browser";
-    if (/Chrome/i.test(ua) && !/Edg/i.test(ua)) browser = "Chrome";
-    else if (/Safari/i.test(ua) && !/Chrome/i.test(ua)) browser = "Safari";
-    else if (/Firefox/i.test(ua)) browser = "Firefox";
-    else if (/Edg/i.test(ua)) browser = "Edge";
+    // 3. Deteksi Resolusi Layar (Membedakan ukuran HP)
+    const screenRes = `${window.screen.width}x${window.screen.height}`;
 
-    const deviceId = dapatkanDeviceId();
-
-    // Format output: "DEV-1234 (Android/Chrome)"
-    return `${deviceId} (${os}/${browser})`;
+    // Hasil Output Otomatis: "ID-583921 [Android | 393x851]"
+    return `${deviceKey} [${os} | ${screenRes}]`;
   }
 
   function dapatkanTanggalHariIni() {
@@ -729,8 +719,8 @@
   }
 
   function kirimData(payload) {
-    // MENYISIPKAN IDENTITAS PERANGKAT OTOMATIS
-    payload.petugas = ambilIdentitasPerangkatOtomatis();
+    // MENYISIPKAN FINGERPRINT UNIK 100% OTOMATIS
+    payload.petugas = ambilIdentifikasiPerangkatOtomatis();
 
     if (payload.action === "inputIuran") {
       if (!cacheDataServer.iuran) cacheDataServer.iuran = [];
