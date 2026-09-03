@@ -1,5 +1,5 @@
 // UBAH ANGKANYA (v1, v2, v3, dst) SETIAP KALI ANDA DEPLOY UPDATE BARU
-const CACHE_NAME = "kas-rt-v8";
+const CACHE_NAME = "kas-rt-v9";
 
 const ASSETS = [
   "./",

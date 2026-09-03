@@ -230,6 +230,25 @@
       color: white;
     }
 
+    /* TOMBOL REFRESH MANUAL */
+    .btn-refresh {
+      background-color: #0284c7;
+      color: white;
+      border: none;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      margin-bottom: 16px;
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    .btn-refresh:hover { background-color: #0369a1; }
+
     /* LAPORAN & RINGKASAN */
     .summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 20px; }
     .summary-card { background: #f8fafc; padding: 12px; border-radius: 10px; border: 1px solid var(--border-color); text-align: center; }
@@ -245,7 +264,7 @@
     .badge-lunas { background-color: #dcfce7; color: var(--success); }
     .badge-belum { background-color: #fee2e2; color: var(--danger); }
 
-    /* LOADING OVERLAY - DIPERBAIKI (align-items: center) */
+    /* LOADING OVERLAY */
     #loadingOverlay {
       position: fixed;
       top: 0; left: 0; width: 100%; height: 100%;
@@ -420,11 +439,11 @@
     <div class="form-group-row">
       <div class="form-group">
         <label>Pilih Bulan</label>
-        <input type="month" id="filterBulan" onchange="muatLaporanKeuangan()">
+        <input type="month" id="filterBulan" onchange="muatLaporanKeuangan(false)">
       </div>
       <div class="form-group">
         <label>Kategori</label>
-        <select id="filterKategori" onchange="muatLaporanKeuangan()">
+        <select id="filterKategori" onchange="muatLaporanKeuangan(false)">
           <option value="semua">Semua Transaksi</option>
           <option value="Kas">Kas Masuk</option>
           <option value="Iuran">Iuran Warga</option>
@@ -432,6 +451,9 @@
         </select>
       </div>
     </div>
+
+    <!-- PENAMBAHAN: TOMBOL REFRESH MANUAL -->
+    <button onclick="muatLaporanKeuangan(true)" class="btn-refresh">🔄 Refresh Data Laporan</button>
 
     <div class="summary-grid">
       <div class="summary-card"><label>Pemasukan</label><div class="amount" style="color:var(--success);" id="totMasuk">Rp 0</div></div>
@@ -507,7 +529,7 @@
     document.getElementById("judulHalaman").innerText = judul;
 
     if (tabName === 'tabLaporan') {
-      muatLaporanKeuangan();
+      muatLaporanKeuangan(false);
     }
     
     closeSidebar();
@@ -637,7 +659,7 @@
     updateStatusKoneksi();
   }
 
-  // FUNGSI KIRIM DATA OPTIMAL (TANPA DELAY SETTIMEOUT & RE-FETCH INSTAN)
+  // TANPA RE-FETCH ATAU PEMANGGILAN LAPORAN OTOMATIS
   function kirimData(payload) {
     if (!navigator.onLine) {
       simpanKeAntreanOffline(payload);
@@ -657,7 +679,6 @@
       sembunyikanLoading();
       alert("Data berhasil diproses!");
 
-      // Update cache lokal langsung tanpa perlu fetch ulang seluruh data dari server
       if (payload.action === "inputIuran" && cacheDataServer && cacheDataServer.iuran) {
         cacheDataServer.iuran.push([
           payload.tanggal,
@@ -821,7 +842,6 @@
     tbody.innerHTML = "";
     tabel.style.display = "table";
 
-    // MENGGUNAKAN DATA CACHE LOKAL AGAR TAMPIL KETIKA DITEKAN TANPA WAIT DELAY
     const prosesRenderTabel = (data) => {
       const iuranRumah = data.iuran.filter(row => {
         return String(row[1]).toUpperCase() === blok && String(row[2]) === noRumah;
@@ -904,7 +924,6 @@
     }
   }
 
-  // FUNGSI HAPUS DIPERCEPAT (TANPA DELAY SETTIMEOUT)
   function kirimDataHapus(payload) {
     tampilkanLoading("Menghapus...");
     fetch(SCRIPT_URL, {
@@ -917,7 +936,6 @@
       sembunyikanLoading();
       alert("Data iuran berhasil dihapus!");
 
-      // Langsung hapus dari cache lokal agar tampilan langsung hilang
       if (cacheDataServer && cacheDataServer.iuran) {
         cacheDataServer.iuran = cacheDataServer.iuran.filter(row => {
           const isMatch = String(row[1]).toUpperCase() === payload.blok && 
@@ -927,7 +945,7 @@
         });
       }
 
-      cekIuranWarga(); // Refresh tampilan tabel instan
+      cekIuranWarga();
     })
     .catch(err => {
       sembunyikanLoading();
@@ -935,7 +953,8 @@
     });
   }
 
-  function muatLaporanKeuangan() {
+  // DENGAN DUKUNGAN REFRESH PAKSA (paksaRefresh = true)
+  function muatLaporanKeuangan(paksaRefresh = false) {
     const filterBulan = document.getElementById("filterBulan").value;
     const filterKategori = document.getElementById("filterKategori").value;
     if (!filterBulan) return;
@@ -988,10 +1007,10 @@
       }
     };
 
-    if (cacheDataServer) {
+    if (cacheDataServer && !paksaRefresh) {
       renderLaporan(cacheDataServer);
     } else {
-      tampilkanLoading("Memuat laporan...");
+      tampilkanLoading("Mengunduh data laporan terbaru...");
       fetch(SCRIPT_URL)
         .then(res => res.json())
         .then(data => {
@@ -1001,6 +1020,7 @@
         })
         .catch(err => {
           sembunyikanLoading();
+          alert("Gagal memperbarui data dari server.");
         });
     }
   }
